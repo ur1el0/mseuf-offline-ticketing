@@ -1,0 +1,67 @@
+# Private / Personal Agent Context
+.agents/AGENTS.md
+AGENTS.md
+.agents/MEMORY.md
+/context/
+scratch/
+
+# Environment & Sensitive Credentials
+.env
+.env.backup
+.env.production
+*.key
+
+# PHP / Composer / Laravel
+/vendor/
+bootstrap/cache/
+storage/framework/sessions/*
+storage/framework/views/*
+storage/framework/cache/*
+storage/logs/*
+!storage/framework/sessions/.gitignore
+!storage/framework/views/.gitignore
+!storage/framework/cache/.gitignore
+!storage/logs/.gitignore
+
+# Node & Package Managers
+node_modules/
+npm-debug.log
+yarn-error.log
+.pnpm-debug.log
+
+# Frontend & Vite Builds
+dist/
+build/
+.vite/
+
+# React Native & Expo
+.expo/
+web-build/
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+*.orig.*
+
+# SQLite Local Scanner Databases & Logs
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.db
+*.db-journal
+
+# IDE & OS Artifacts
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# Test Coverage & Caches
+.phpunit.result.cache
+coverage/
+.nyc_output/
