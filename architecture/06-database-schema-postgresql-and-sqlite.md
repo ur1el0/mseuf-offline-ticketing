@@ -3,17 +3,20 @@
 ## 1. Authoritative Server Schema (PostgreSQL)
 
 ```sql
--- Users / Students
+-- User accounts for Students, Security Staff, and Administrators
 CREATE TABLE users (
     id BIGSERIAL PRIMARY KEY,
-    student_number VARCHAR(32) UNIQUE NOT NULL,
+    student_number VARCHAR(32) UNIQUE,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
-    role VARCHAR(32) DEFAULT 'student', -- 'student', 'scanner', 'admin'
+    role VARCHAR(32) NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'security_staff', 'administrator')),
+    CHECK ((role = 'student' AND student_number IS NOT NULL) OR (role IN ('security_staff', 'administrator') AND student_number IS NULL)),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- student_number is required for student accounts and NULL for non-student accounts.
 
 -- Event Tickets Table
 CREATE TABLE tickets (

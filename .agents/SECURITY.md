@@ -49,3 +49,12 @@ Static QR codes and screenshot sharing represent the primary vulnerability in tr
 
 1. **Master PIN Protection:** The override PIN is never stored in plaintext. Mobile scanners compare hashed inputs against a salted environment configuration or supervisor hash.
 2. **Mandatory Audit Logging:** Every override bypass creates an immutable record with `anomaly_type = 'OVERRIDE'`, capturing the marshal's device ID, gate ID, and timestamp.
+
+---
+
+## 6. Role-Based Access Boundaries
+
+1. The only end-user roles are `student`, `security_staff`, and `administrator`.
+2. Students can access only their own issued tickets and ticket secrets through the student mobile app.
+3. Security Staff authenticate to the offline scanner app and can download manifests only for gates assigned to them. A marshal override is an explicitly authorized Security Staff capability, not a separate account role.
+4. Administrators use the desktop web dashboard to configure events and gate assignments and to monitor system and audit logs. Administrative endpoints must reject student and Security Staff tokens.

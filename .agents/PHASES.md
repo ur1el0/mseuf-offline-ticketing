@@ -7,7 +7,7 @@ This document outlines the sequential phases of development, tracking progress f
 ## Phase 1: Authoritative Server MVC Foundation & Cryptography
 * [ ] Initialize Laravel REST API with PostgreSQL connection via Supabase Session Pooler (Port 5432).
 * [ ] Database migrations: `users`, `tickets`, `scan_logs`, `audit_logs` with all indexes and constraints.
-* [ ] User authentication with Laravel Sanctum (Student & Admin roles).
+* [ ] User authentication and authorization with Laravel Sanctum for the `student`, `security_staff`, and `administrator` roles.
 * [ ] Cryptographic Seed Service: AES-256 base32 TOTP secret generation, encryption, and issuance.
 * [ ] Eloquent Models with relationships, scopes, and encrypted cast attributes.
 * [ ] Seeders for MSEUF sample events, gates (Gate 1, Gate 2, Gym), students, and tickets.
@@ -26,8 +26,9 @@ This document outlines the sequential phases of development, tracking progress f
 
 ---
 
-## Phase 3: Web Admin Dashboard (Risk-Free Delivery)
+## Phase 3: Administrator Web Dashboard (Risk-Free Delivery)
 * [ ] React + TypeScript SPA setup using Tailwind CSS.
+* [ ] Administrator workflows to set up events and manage gate assignments.
 * [ ] HTTP Polling service (5s–10s intervals) targeting `/api/v1/admin/metrics` (no WebSockets).
 * [ ] Gate Throughput & Status Cards (Admitted vs. Remaining per gate).
 * [ ] Anomaly & Collision Alert Feed with live forensic details.

@@ -3,6 +3,8 @@
 ## 1. Executive Summary
 The **MSEUF Events Offline Ticketing System** is an offline-first cryptographic admissions management platform engineered for university events (e.g., Foundation Week, University Days, concerts, sporting meets) at Manuel S. Enverga University Foundation (MSEUF).
 
+The system has exactly three end-user roles: Students use a mobile app to present securely stored rotating tickets; Security Staff use an offline mobile scanner app at venue doors to validate tickets and manage physical access; Administrators use a desktop web dashboard to set up events, manage gate assignments, and monitor system logs. Gate marshal override is a Security Staff duty, not a separate role.
+
 University venue gates (e.g., University Gymnasium, Main Gate, Sports Complex) frequently experience complete cellular blackout or severe bandwidth throttling during mass crowd ingress. The system guarantees sub-second attendee admission verification with zero live network dependency, while eliminating screenshot fraud, double-spending, and multi-device split-brain synchronization anomalies.
 
 ---
@@ -35,12 +37,12 @@ To satisfy academic midterm assessment criteria requiring strict MVC adherence w
 1. **Authoritative Server MVC (Laravel REST API & Supabase PostgreSQL):**
    - **Model:** PostgreSQL schema managed by Eloquent Models (`User`, `Ticket`, `ScanLog`, `AuditLog`). Acts as the single source of truth for ticket ownership, issuance, and audit logs.
    - **Controller:** REST API Controllers (`TicketSyncController`, `TicketIssuanceController`, `AuthController`) orchestrating validation via FormRequests and business rules via Domain Services.
-   - **View:** Structured JSON API responses and the Web Admin Dashboard (React + TypeScript).
+   - **View:** Structured JSON API responses and the Administrator Web Dashboard (React + TypeScript) for event/gate configuration and log monitoring.
 
 2. **Client Replica MVC (React Native Expo Mobile Applications):**
    - **Model:** Local persistent state stored in `expo-sqlite` (`local_manifest`, `pending_sync_queue`) and hardware-encrypted seeds stored in `expo-secure-store`.
    - **Controller:** Client domain controllers (`totpController`, `scannerController`, `syncController`, `marshalOverrideController`) handling cryptographic evaluation, local admission states, and store-and-forward syncing.
-   - **View:** Declarative UI screens (`ScannerScreen`, `StudentTicketScreen`) displaying camera HUDs, status badges, and SVG vector QR codes (`react-native-qrcode-svg`).
+   - **View:** Student ticket screens and Security Staff scanner screens displaying rotating QR codes, camera HUDs, and admission status badges.
 
 ---
 

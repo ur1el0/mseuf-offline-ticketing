@@ -2,6 +2,9 @@
 
 This glossary defines the cryptographic, distributed systems, and architectural terminology used across the MSEUF Offline Ticketing project.
 
+### End-User Roles
+The system has three end-user roles: **Student** (uses the student mobile app to present a rotating ticket), **Security Staff** (uses the offline scanner mobile app to validate tickets and manage entry), and **Administrator** (uses the desktop web dashboard to configure events and gates and monitor logs). A gate marshal is Security Staff authorized to perform an override, not a fourth role.
+
 ---
 
 ### Distributed MVC

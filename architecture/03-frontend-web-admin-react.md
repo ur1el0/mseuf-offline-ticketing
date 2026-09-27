@@ -1,7 +1,7 @@
 # 03 - Web Admin Dashboard Architecture (React + TypeScript)
 
 ## 1. Overview
-The Web Admin Dashboard provides real-time situational awareness for MSEUF event organizers and security staff. It visualizes campus-wide admission throughput, monitors gate health, tracks offline sync queues, and exposes forensic logs for split-brain collisions and marshal overrides.
+The desktop Administrator Web Dashboard lets administrators set up events, manage gate assignments, and monitor system activity. It visualizes admission throughput, gate health, offline sync queues, split-brain collisions, and marshal overrides. Security Staff use the separate offline mobile scanner app and do not use this dashboard as an end-user surface.
 
 ---
 
@@ -20,6 +20,7 @@ The Web Admin Dashboard provides real-time situational awareness for MSEUF event
 App
 └── AdminDashboardLayout
     ├── NavigationHeader
+    ├── EventSetupAndGateAssignment
     ├── MetricsSummaryGrid
     │   ├── TotalIssuedCard
     │   ├── TotalAdmittedCard
@@ -30,6 +31,8 @@ App
     ├── ForensicAlertFeed (Collisions & Gate Mismatches)
     └── MarshalOverrideLogTable
 ```
+
+The dashboard is restricted to the `administrator` role. It supports event configuration, gate assignment management, live operational metrics, and system/audit log review.
 
 ---
 

@@ -6,7 +6,8 @@ This backlog enumerates granular engineering tasks across all development phases
 
 ## 1. Backend API & Cryptography (Laravel)
 - [ ] Configure `config/database.php` for Supabase Session Pooler (port 5432) with persistent connections.
-- [ ] Create migration for `users` table with `student_number` unique index.
+- [ ] Create migration for `users` table with nullable unique `student_number` and the `student`, `security_staff`, and `administrator` role allowlist.
+- [ ] Implement role-specific authorization policies for student tickets, assigned scanner gates, and administrator workflows.
 - [ ] Create migration for `tickets` table with `totp_secret` (encrypted text), `gate_id`, `status`.
 - [ ] Create migration for `scan_logs` table with `scan_id` (UUID unique) and foreign key to `tickets`.
 - [ ] Create migration for `audit_logs` table with `anomaly_type`, `colliding_scan_id`, and `metadata` (JSONB).
@@ -20,8 +21,9 @@ This backlog enumerates granular engineering tasks across all development phases
 
 ---
 
-## 2. Web Admin Dashboard (React + TypeScript)
+## 2. Administrator Web Dashboard (React + TypeScript)
 - [ ] Set up React Vite application with Tailwind CSS and Lucide icons.
+- [ ] Build administrator workflows for event setup and gate assignment management.
 - [ ] Build `useAdminMetrics` hook using HTTP interval polling (5s frequency).
 - [ ] Implement Gate Throughput visual cards with progress bars (Admitted vs. Remaining).
 - [ ] Implement Live Anomaly & Collision Alert Feed displaying device IDs and colliding timestamps.

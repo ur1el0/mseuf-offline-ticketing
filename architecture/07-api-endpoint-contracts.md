@@ -3,11 +3,11 @@
 ## 1. Authentication Endpoints
 
 ### `POST /api/v1/auth/login`
-Authenticates students, marshals, and administrators.
+Authenticates the three end-user roles: Students, Security Staff, and Administrators. Students identify with their student number; Security Staff and Administrators identify with their institutional email.
 * **Request Body:**
   ```json
   {
-    "student_number": "2023-01042",
+    "identifier": "2023-01042",
     "password": "SecurePassword123"
   }
   ```
@@ -30,7 +30,7 @@ Authenticates students, marshals, and administrators.
 
 ### `GET /api/v1/gates/{gate_id}/manifest`
 Downloads the partitioned manifest for a specific gate prior to event ingress.
-* **Headers:** `Authorization: Bearer <sanctum_token>` (Role: `scanner` or `admin`).
+* **Headers:** `Authorization: Bearer <sanctum_token>` (Role: `security_staff`; manifest access is restricted to the user's assigned gate).
 * **Response (200 OK):**
   ```json
   {
@@ -54,7 +54,7 @@ Downloads the partitioned manifest for a specific gate prior to event ingress.
 
 ### `POST /api/v1/sync/batch`
 Receives compressed batches of 25–50 un-synced scan records from mobile scanners.
-* **Headers:** `Authorization: Bearer <sanctum_token>`
+* **Headers:** `Authorization: Bearer <sanctum_token>` (Role: `security_staff`).
 * **Request Body:**
   ```json
   {
@@ -86,7 +86,8 @@ Receives compressed batches of 25–50 un-synced scan records from mobile scanne
 ## 4. Live Admin Metrics Endpoint
 
 ### `GET /api/v1/admin/metrics`
-Polled by the React Web Admin dashboard every 5–10 seconds.
+Polled by the Administrator Web Dashboard every 5–10 seconds.
+* **Authorization:** Administrator role only.
 * **Response (200 OK):**
   ```json
   {

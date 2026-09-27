@@ -29,7 +29,7 @@ In a multi-gate offline university environment, attendees attempting to enter th
 
 ## 3. Marshal Override PIN Workflow
 
-During emergency situations (e.g. sudden rainstorm, physical gate bottleneck, electrical failure at Gate 1 requiring redirection of crowds to Gate 2), authorized gate marshals can force-admit attendees.
+During emergency situations (e.g. sudden rainstorm, physical gate bottleneck, electrical failure at Gate 1 requiring redirection of crowds to Gate 2), authorized Security Staff assigned as gate marshals can force-admit attendees. “Gate marshal” describes this operational duty; the account role remains `security_staff`.
 
 ```
 [ Scanner Screen: Gate Mismatch or Unclaimed Verification ]
