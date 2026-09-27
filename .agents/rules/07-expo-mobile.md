@@ -4,7 +4,7 @@ trigger: always_on
 
 # Rule 07: React Native Expo Mobile Standards
 
-These standards govern the mobile client architecture across Student and Scanner applications.
+These standards govern the two mobile end-user applications: the Student ticket app and the Security Staff offline scanner app. Administrators use the desktop web dashboard.
 
 ### 1. Model Layer: `expo-sqlite` & `expo-secure-store`
 * **Rule:** Native database operations and keychain calls must be isolated in service abstractions.

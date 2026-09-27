@@ -9,9 +9,11 @@ The platform guarantees sub-second attendee admission verification at high-throu
 
 ## 2. Target Audience & Roles
 
-* **Students (Attendees):** Receive cryptographic event tickets, authenticate through their student credentials, and present offline dynamic vector QR codes that refresh every 30 seconds.
-* **Gate Marshals / Ticket Scanners:** Stationed at physical venue entrances (Gate 1, Gate 2, Gymnasium Entrance). Scan student QR codes offline using mobile devices, view admission status instantly, and execute authorized PIN overrides during gate reassignments or crowd surges.
-* **Event Administrators:** Monitor campus-wide gate throughput, ticket status distributions, sync queue reconciliation, and forensic collision audit logs via the Web Admin Dashboard.
+The system has exactly three end-user roles:
+
+* **Students:** Use the student mobile app to display their securely stored, rotating digital tickets for venue entry.
+* **Security Staff:** Use the offline mobile scanner app at venue doors to validate student tickets and manage physical access. A gate marshal is a Security Staff duty, not a separate user role; authorized staff may use the PIN override workflow.
+* **Administrators:** Use the desktop web dashboard to set up events, manage gate assignments, and monitor system and audit logs.
 
 ---
 
@@ -41,7 +43,8 @@ The platform guarantees sub-second attendee admission verification at high-throu
 - If an HTTP connection drops after the server commits but before the client receives the ACK, the scanner retries safely. The server's `UNIQUE (scan_id)` constraint ensures idempotency without false split-brain alerts.
 - In genuine multi-device double-scan scenarios (different `scan_id` for same `ticket_id`), the server detects the conflict via pessimistic locking and logs a `SPLIT_BRAIN_COLLISION` to `audit_logs`.
 
-### 3.5 Web Admin Live Dashboard & Forensic Auditing
+### 3.5 Administrator Web Dashboard & System Monitoring
+- Administrators can set up events, manage gate assignments, and review system logs.
 - Live metrics for Total Tickets, Admitted Count, Pending Syncs, Gate Throughput, and Flagged Collisions.
 - HTTP polling (5–10s intervals) ensures zero WebSocket drops during presentations.
 - Forensic audit log viewer displaying colliding timestamps, device IDs, and override events.

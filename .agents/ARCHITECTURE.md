@@ -38,7 +38,8 @@ The MSEUF Events Offline Ticketing System operates as a **Distributed Model-View
   * Controllers strictly validate incoming requests via dedicated FormRequests and delegate business logic to Domain Services (`SyncReconciliationService`, `TicketVerificationService`).
 * **View Layer:**
   * API Layer: Standardized Eloquent API Resources (`TicketResource`, `ScanLogResource`, `AuditLogResource`).
-  * Web Admin Dashboard: React SPA with TypeScript and Tailwind CSS, consuming API endpoints via deterministic HTTP interval polling (5s–10s cadence) to eliminate WebSocket delivery failure risk.
+  * Administrator Web Dashboard: Desktop React SPA with TypeScript and Tailwind CSS for event setup, gate assignment management, and system/audit log monitoring. Live metrics use deterministic HTTP polling (5s–10s cadence).
+* **End-User Roles:** Exactly three roles are supported: `student` (student mobile app), `security_staff` (offline scanner mobile app), and `administrator` (desktop web dashboard). Gate marshal override is an authorized Security Staff duty, not a separate role.
 
 ### 2.2 Client Replica MVC (React Native Expo Mobile Client)
 * **Model Layer:**
@@ -61,11 +62,12 @@ The MSEUF Events Offline Ticketing System operates as a **Distributed Model-View
 ```sql
 CREATE TABLE users (
     id BIGSERIAL PRIMARY KEY,
-    student_number VARCHAR(32) UNIQUE NOT NULL,
+    student_number VARCHAR(32) UNIQUE,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
-    role VARCHAR(32) DEFAULT 'student',
+    role VARCHAR(32) NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'security_staff', 'administrator')),
+    CHECK ((role = 'student' AND student_number IS NOT NULL) OR (role IN ('security_staff', 'administrator') AND student_number IS NULL)),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

@@ -4,7 +4,7 @@ trigger: always_on
 
 # Rule 03: React Web Admin Dashboard Standards
 
-These standards govern the implementation of the event monitoring dashboard.
+These standards govern the desktop dashboard used by the `administrator` role for event setup, gate assignment management, and system log monitoring.
 
 ### 1. HTTP Polling Only (Zero WebSocket Dependency)
 * **Rule:** Do NOT use WebSockets, Pusher, or Socket.io.
