@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AdminEventController;
 use App\Http\Controllers\Api\V1\AdminEventGateAssignmentController;
 use App\Http\Controllers\Api\V1\AdminEventOptionsController;
 use App\Http\Controllers\Api\V1\AdminMetricsController;
+use App\Http\Controllers\Api\V1\AdminSecurityStaffController;
 use App\Http\Controllers\Api\V1\AssignedGatesController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\GateManifestController;
@@ -29,6 +30,9 @@ Route::prefix('v1')->group(function (): void {
         ->middleware(['auth:sanctum', 'role:security_staff']);
 
     Route::middleware(['auth:sanctum', 'role:administrator'])->prefix('admin')->group(function (): void {
+        Route::get('/security-staff', [AdminSecurityStaffController::class, 'index']);
+        Route::post('/security-staff', [AdminSecurityStaffController::class, 'store'])
+            ->middleware('throttle:10,1');
         Route::get('/event-options', AdminEventOptionsController::class);
         Route::get('/events', [AdminEventController::class, 'index']);
         Route::post('/events', [AdminEventController::class, 'store']);
