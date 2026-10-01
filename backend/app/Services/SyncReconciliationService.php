@@ -1,0 +1,137 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\EventGate;
+use App\Models\EventGateStaffAssignment;
+use App\Models\ScanLog;
+use App\Models\Ticket;
+use App\Models\User;
+use App\Services\Sync\SyncScanProcessor;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\DB;
+
+class SyncReconciliationService
+{
+    public function __construct(private readonly SyncScanProcessor $scanProcessor) {}
+
+    /**
+     * @param array<int, array{
+     *     scan_id: string,
+     *     ticket_id: int|string,
+     *     gate_id: int|string,
+     *     scanned_at: int|string,
+     *     is_override: bool|int|string,
+     *     event_configuration_version?: int|string|null
+     * }> $scans
+     * @return array{processed: int, acknowledged_scan_ids: array<int, string>, anomalies_logged: int}
+     */
+    public function reconcile(User $staff, string $deviceId, array $scans): array
+    {
+        return DB::transaction(function () use ($staff, $deviceId, $scans): array {
+            $scanIds = array_column($scans, 'scan_id');
+            $existingScanIds = array_fill_keys(
+                ScanLog::query()->whereIn('scan_id', $scanIds)->pluck('scan_id')->all(),
+                true,
+            );
+
+            $pendingScans = array_values(array_filter(
+                $scans,
+                static fn (array $scan): bool => ! isset($existingScanIds[$scan['scan_id']]),
+            ));
+
+            if ($pendingScans === []) {
+                return $this->response($scanIds, 0);
+            }
+
+            $gateIds = array_values(array_unique(array_map(
+                static fn (array $scan): int => (int) $scan['gate_id'],
+                $pendingScans,
+            )));
+            sort($gateIds, SORT_NUMERIC);
+
+            $assignedGateIds = EventGateStaffAssignment::query()
+                ->where('user_id', $staff->getKey())
+                ->whereIn('event_gate_id', $gateIds)
+                ->orderBy('event_gate_id')
+                ->lockForUpdate()
+                ->pluck('event_gate_id')
+                ->map(static fn (mixed $gateId): int => (int) $gateId)
+                ->all();
+
+            if (array_diff($gateIds, $assignedGateIds) !== []) {
+                throw new AuthorizationException('You are not assigned to every gate in this batch.');
+            }
+
+            $ticketIds = array_values(array_unique(array_map(
+                static fn (array $scan): int => (int) $scan['ticket_id'],
+                $pendingScans,
+            )));
+            sort($ticketIds, SORT_NUMERIC);
+
+            $tickets = Ticket::query()
+                ->whereIn('id', $ticketIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            $persistedAfterLock = array_fill_keys(
+                ScanLog::query()
+                    ->whereIn('scan_id', array_column($pendingScans, 'scan_id'))
+                    ->pluck('scan_id')
+                    ->all(),
+                true,
+            );
+
+            $eventGates = EventGate::query()
+                ->with('event')
+                ->whereIn('id', $gateIds)
+                ->get()
+                ->keyBy('id');
+
+            $anomaliesLogged = 0;
+
+            foreach ($pendingScans as $scan) {
+                $scanId = $scan['scan_id'];
+
+                if (isset($persistedAfterLock[$scanId])) {
+                    continue;
+                }
+
+                $ticketId = (int) $scan['ticket_id'];
+                $gateId = (int) $scan['gate_id'];
+                $ticket = $tickets->get($ticketId);
+                $scannedGate = $eventGates->get($gateId);
+
+                if (! $ticket instanceof Ticket) {
+                    throw (new ModelNotFoundException)->setModel(Ticket::class, [$ticketId]);
+                }
+
+                if (! $scannedGate instanceof EventGate) {
+                    throw (new ModelNotFoundException)->setModel(EventGate::class, [$gateId]);
+                }
+
+                if ($this->scanProcessor->process($scan, $ticket, $scannedGate, $staff, $deviceId)) {
+                    $anomaliesLogged++;
+                }
+            }
+
+            return $this->response($scanIds, $anomaliesLogged);
+        }, 3);
+    }
+
+    /**
+     * @param  array<int, string>  $scanIds
+     * @return array{processed: int, acknowledged_scan_ids: array<int, string>, anomalies_logged: int}
+     */
+    private function response(array $scanIds, int $anomaliesLogged): array
+    {
+        return [
+            'processed' => count($scanIds),
+            'acknowledged_scan_ids' => $scanIds,
+            'anomalies_logged' => $anomaliesLogged,
+        ];
+    }
+}
