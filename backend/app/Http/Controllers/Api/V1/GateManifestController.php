@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\V1\GateManifestResource;
+use App\Models\Event;
 use App\Models\EventGate;
 use App\Models\Ticket;
 use App\Models\User;
@@ -26,16 +27,23 @@ class GateManifestController extends Controller
             ->whereHas('staffAssignments', function (Builder $query) use ($user): void {
                 $query->where('user_id', $user->getKey());
             })
-            ->with([
-                'event',
-                'tickets' => function (Builder $query): void {
-                    $query
-                        ->whereIn('status', [Ticket::STATUS_ISSUED, Ticket::STATUS_CLAIMED])
-                        ->with('user:id,student_number')
-                        ->orderBy('id');
-                },
-            ])
+            ->with('event')
             ->firstOrFail();
+
+        if (! in_array($eventGate->event->status, [Event::STATUS_SCHEDULED, Event::STATUS_IN_PROGRESS], true)) {
+            return response()->json([
+                'message' => 'A scanner manifest is available only for scheduled or in-progress events.',
+            ], 409)->header('Cache-Control', 'no-store');
+        }
+
+        $eventGate->load([
+            'tickets' => function (Builder $query): void {
+                $query
+                    ->whereIn('status', [Ticket::STATUS_ISSUED, Ticket::STATUS_CLAIMED])
+                    ->with('user:id,student_number')
+                    ->orderBy('id');
+            },
+        ]);
 
         return (new GateManifestResource($eventGate))
             ->response($request)
