@@ -18,23 +18,64 @@ This document records the API conventions for this project and marks which route
 | `POST /api/v1/auth/login` | Public, throttled | Issues a Sanctum token and returns the user identity and role. |
 | `POST /api/v1/auth/logout` | Authenticated | Revokes the current token. |
 | `GET /api/v1/auth/me` | Authenticated | Returns the current user identity and role. |
-| `GET /api/v1/gates/{gateId}/manifest` | Assigned security staff | Returns the assigned gate's ticket manifest. Response includes `Cache-Control: no-store`. |
+| `GET /api/v1/gates/{gateId}/manifest` | Assigned security staff | Returns the assigned gate's ticket manifest for scheduled or in-progress events. Response includes `Cache-Control: no-store`. |
 | `POST /api/v1/sync/batch` | Security staff | Reconciles a batch of scanner records using client `scan_id` values. |
 | `GET /api/v1/admin/metrics` | Administrator | Returns ticket/admission totals, gate capacity, and recent anomalies. `event_id` is an optional filter. |
+| `GET /api/v1/admin/event-options` | Administrator | Returns venue gates and security staff choices for event setup. |
+| `GET /api/v1/admin/events` | Administrator | Returns up to 100 events ordered by start time descending, with venue, gates, and assigned staff. |
+| `POST /api/v1/admin/events` | Administrator | Creates a draft event and records configuration version 1. |
+| `GET /api/v1/admin/events/{event}` | Administrator | Returns one event and its current configuration. |
+| `PATCH /api/v1/admin/events/{event}` | Administrator | Updates details, schedule, or lifecycle status with a versioned change log. |
+| `PUT /api/v1/admin/events/{event}/gates` | Administrator | Replaces draft assignments or adds gates/staff after scheduling while preserving existing offline scanner assignments. |
 
 For exact response fields, inspect the matching Laravel controller and API Resource. The login response currently has `token` and `user`; it does not promise the extra `token_type`, `email`, `created_at`, or `student_id` fields shown in the reference. The metrics resource currently reports `pending_sync_estimate: null` because scanner heartbeat counts are not implemented. Clients must render this as unavailable, not zero.
 
+## Administrator event setup contract
+
+All routes below require a Sanctum bearer token and the `administrator` role. Responses are endpoint-specific JSON objects without a global `data` wrapper.
+
+### `GET /api/v1/admin/event-options`
+
+Returns `{ "venues": [{ "id", "name", "location_details", "gates": [{ "id", "code", "name" }] }], "security_staff": [{ "id", "name", "email" }] }`. Gate IDs identify physical `venue_gates`; assignment IDs identify users whose role is exactly `security_staff`.
+
+### Event listing and detail
+
+- `GET /api/v1/admin/events` returns `{ "events": [Event] }`, newest event start time first, limited to 100 rows.
+- `GET /api/v1/admin/events/{event}` returns one `Event`.
+- An `Event` contains `id`, `venue_id`, `venue`, `name`, `description`, ISO-8601 `starts_at` and `ends_at`, `status`, `configuration_version`, and `event_gates`. Each event gate includes its physical `venue_gate_id`, code/name, optional capacity, and assigned security staff identity.
+
+### `POST /api/v1/admin/events`
+
+Creates an event in `draft` state at configuration version 1 and records the creation in `event_change_logs`. Request fields: `venue_id`, `name`, optional `description`, `starts_at`, and `ends_at`. The end must be later than the start. The response is the new `Event` with HTTP 201. Gate assignments are configured separately.
+
+### `PATCH /api/v1/admin/events/{event}`
+
+Accepts any non-empty subset of `name`, `description`, `starts_at`, `ends_at`, and `status`, plus optional `reason`. Supported transitions are `draft -> scheduled|cancelled`, `scheduled -> in_progress|postponed|cancelled`, `in_progress -> postponed|cancelled|completed`, and `postponed -> scheduled|cancelled`. `cancelled` and `completed` are terminal.
+
+A reason is required when cancelling or postponing, when rescheduling a non-draft event, and when resuming a postponed event. Invalid transitions, terminal edits, invalid dates, or missing reasons return 422. Every actual change locks the event row, increments `configuration_version`, and writes one event change log in the same transaction. Repeating the same value does not create a new version.
+
+### `PUT /api/v1/admin/events/{event}/gates`
+
+The request supplies the desired gate configuration:
+
+```json
+{
+  "gates": [
+    { "venue_gate_id": 4, "capacity": 300, "security_staff_ids": [18, 23] }
+  ],
+  "reason": "Move overflow staff to the east entrance"
+}
+```
+
+The gate must belong to the event venue; every staff ID must belong to a security-staff user. `capacity` may be `null` or a positive integer. The operation increments the event configuration version and records old/new gate snapshots if anything changed. In `draft`, the supplied collection replaces current gate assignments, but a gate referenced by tickets or scan history cannot be removed. After scheduling, existing gates and staff assignments cannot be removed through this endpoint because offline scanners may retain manifests; administrators can add gates or staff, and must provide a reason for a real change. Capacity cannot be reduced below admissions already synchronized. Because scanners can be offline, this value cannot account for scans still queued on devices and is not a hard real-time occupancy limit. Cancelled and completed events reject gate changes.
+
+### Manifest availability
+
+`GET /api/v1/gates/{gateId}/manifest` returns 409 unless the event is `scheduled` or `in_progress`. The manifest now includes `event_status` alongside `gate_id`, `manifest_version`, and tickets. A previously downloaded offline manifest cannot receive an immediate cancellation or postponement; operators must account for that offline limitation until the scanner reconnects.
+
 ## Routes still to design
 
-The current backend does **not** yet expose the full product API. Do not present these capabilities as implemented:
-
-- student ticket wallet and ticket detail retrieval;
-- event creation, editing, cancellation/rescheduling, and publication;
-- gate setup and staff assignment management;
-- complete, filterable audit-log browsing;
-- scanner heartbeat and pending-sync telemetry.
-
-Define routes and payloads for each capability from the existing `events`, `event_gates`, `event_gate_staff_assignments`, `tickets`, and audit models. Do not copy the reference's `registrations`, `access_points`, `/me/tickets`, or `/staff/events/.../admissions` names without a deliberate schema and ADR review.
+The current backend does **not** yet expose the full product API. Student ticket wallet retrieval, complete filterable audit-log browsing, and scanner heartbeat/pending-sync telemetry remain planned. Do not present those capabilities as implemented. Do not copy the reference's `registrations`, `access_points`, `/me/tickets`, or `/staff/events/.../admissions` names without a deliberate schema and ADR review.
 
 ## Rules for new endpoints
 

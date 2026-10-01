@@ -35,7 +35,8 @@ Downloads the partitioned manifest for a specific gate prior to event ingress.
   ```json
   {
     "gate_id": 1,
-    "manifest_version": 1727218900,
+    "event_status": "scheduled",
+  "manifest_version": 1,
     "tickets": [
       {
         "ticket_id": 10492,
@@ -93,7 +94,7 @@ Polled by the Administrator Web Dashboard every 5–10 seconds.
   {
     "total_issued": 1200,
     "total_admitted": 842,
-    "pending_sync_estimate": 45,
+    "pending_sync_estimate": null,
     "gates": [
       { "gate_id": 1, "name": "Main Entrance", "admitted": 410, "capacity": 600 },
       { "gate_id": 2, "name": "Gymnasium Gate", "admitted": 432, "capacity": 600 }
@@ -110,3 +111,48 @@ Polled by the Administrator Web Dashboard every 5–10 seconds.
     ]
   }
   ```
+---
+
+## 5. Administrator Event Setup and Gate Assignment
+
+All endpoints in this section use `Authorization: Bearer <sanctum_token>` and the `administrator` role. These endpoints return endpoint-specific JSON without a global `data` wrapper.
+
+### `GET /api/v1/admin/event-options`
+
+Returns the available venues with their physical gates, plus security staff eligible for assignment:
+
+```json
+{
+  "venues": [
+    { "id": 2, "name": "University Gymnasium", "location_details": "Campus east", "gates": [{ "id": 4, "code": "EAST", "name": "East Entrance" }] }
+  ],
+  "security_staff": [{ "id": 18, "name": "Security Staff A", "email": "staff@example.edu" }]
+}
+```
+
+### `GET /api/v1/admin/events` and `GET /api/v1/admin/events/{event}`
+
+The list returns at most 100 events, ordered by start time descending. Detail returns one event. Both use the event fields `id`, `venue_id`, `venue`, `name`, `description`, `starts_at`, `ends_at`, `status`, `configuration_version`, and `event_gates`. Gate entries contain their physical `venue_gate_id`, code/name, optional capacity, and assigned staff identities.
+
+### `POST /api/v1/admin/events`
+
+Creates a `draft` event at configuration version 1. Request fields are `venue_id`, `name`, optional `description`, `starts_at`, and `ends_at`; the end must follow the start. Returns the event with HTTP 201 and records `event_created` in `event_change_logs`. Gate assignments are configured with the separate gate endpoint.
+
+### `PATCH /api/v1/admin/events/{event}`
+
+Accepts a non-empty subset of `name`, `description`, `starts_at`, `ends_at`, and `status`, with optional `reason`. Status transitions are `draft -> scheduled|cancelled`, `scheduled -> in_progress|postponed|cancelled`, `in_progress -> postponed|cancelled|completed`, and `postponed -> scheduled|cancelled`. Cancelled and completed are terminal. Cancellation, postponement, rescheduling a non-draft event, and resuming a postponed event require a reason. Invalid transitions or missing reasons return 422. Each actual update locks the event row, increments its configuration version, and inserts a change log in one database transaction.
+
+### `PUT /api/v1/admin/events/{event}/gates`
+
+Request body:
+
+```json
+{
+  "gates": [{ "venue_gate_id": 4, "capacity": 300, "security_staff_ids": [18, 23] }],
+  "reason": "Move overflow staff to the east entrance"
+}
+```
+
+Every physical gate must belong to the event venue, each staff ID must be a security-staff user, and capacity is null or a positive integer. Draft assignments are replaceable, except that a gate with tickets or scan history cannot be removed. After scheduling, this endpoint is additive: previously assigned gates and staff cannot be removed because scanners may hold offline manifests and their queued scans still need authorization. Real changes increment the event configuration version and store old/new gate snapshots. A post-draft change requires a reason; capacity cannot be lowered below admissions already synchronized. Since offline scanners may have unsynced scans, capacity is not a hard real-time occupancy limit. Cancelled and completed events reject gate changes.
+
+The manifest endpoint returns 409 unless the event is scheduled or in progress and includes `event_status`. A disconnected scanner can still hold a prior manifest; cancellation or postponement cannot invalidate it until that scanner reconnects.
