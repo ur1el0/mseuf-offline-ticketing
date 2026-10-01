@@ -26,7 +26,7 @@ Admin web dashboard ── admin API ──────┘
 - **Supabase PostgreSQL** is the shared server database. Migrations in `backend/database/migrations` define its schema. Credentials and service keys stay in local environment files and the hosted secret store.
 - **Admin web** is a React + TypeScript desktop client. It renders server data and sends administrator actions through the versioned API. The server remains responsible for authorization and business rules.
 - **Student mobile** renders the student's own ticket. The QR token rotates every 30 seconds using the ticket's TOTP seed; a static screenshot must not be treated as a valid ticket.
-- **Security scanner mobile** downloads only its assigned gate's manifest, checks rotating tokens against its own clock, records accepted scans in its local queue, and syncs batches when connectivity returns.
+- **Security scanner mobile** can sign in, configure the local API address, and list metadata for its assigned event gates. The planned full scanner downloads only its assigned gate's manifest, checks rotating tokens against its own clock, records accepted scans in its local queue, and syncs batches when connectivity returns.
 
 ## Offline admission and reconciliation
 

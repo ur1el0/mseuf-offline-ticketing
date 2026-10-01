@@ -18,6 +18,7 @@ This document records the API conventions for this project and marks which route
 | `POST /api/v1/auth/login` | Public, throttled | Issues a Sanctum token and returns the user identity and role. |
 | `POST /api/v1/auth/logout` | Authenticated | Revokes the current token. |
 | `GET /api/v1/auth/me` | Authenticated | Returns the current user identity and role. |
+| `GET /api/v1/staff/gates` | Security staff | Lists only the authenticated staff member's assigned event gates with non-secret event and ticket-count metadata. Response includes `Cache-Control: private, no-store`. |
 | `GET /api/v1/gates/{gateId}/manifest` | Assigned security staff | Returns the assigned gate's ticket manifest for scheduled or in-progress events. Response includes `Cache-Control: no-store`. |
 | `POST /api/v1/sync/batch` | Security staff | Reconciles a batch of scanner records using client `scan_id` values. |
 | `GET /api/v1/admin/metrics` | Administrator | Returns ticket/admission totals, gate capacity, and recent anomalies. `event_id` is an optional filter. |
@@ -72,6 +73,10 @@ The gate must belong to the event venue; every staff ID must belong to a securit
 ### Manifest availability
 
 `GET /api/v1/gates/{gateId}/manifest` returns 409 unless the event is `scheduled` or `in_progress`. The manifest now includes `event_status` alongside `gate_id`, `manifest_version`, and tickets. A previously downloaded offline manifest cannot receive an immediate cancellation or postponement; operators must account for that offline limitation until the scanner reconnects.
+
+### Assigned gate discovery
+
+`GET /api/v1/staff/gates` requires a Sanctum bearer token and the `security_staff` role. It returns an `assignments` array containing only gates assigned to the authenticated staff member. Each entry has `gate_id`, `gate_code`, `gate_name`, `event_id`, `event_name`, `event_status`, `starts_at`, `ends_at`, `manifest_version`, and `ticket_count` for issued or claimed tickets. The endpoint returns metadata only: it never returns ticket IDs, student numbers, QR material, or TOTP secrets. It includes assignments for events in any lifecycle state so staff can see the latest server status; only the manifest endpoint is limited to scheduled/in-progress events. If the staff member has no assignments, `assignments` is an empty array. Responses include `Cache-Control: private, no-store`.
 
 ## Routes still to design
 

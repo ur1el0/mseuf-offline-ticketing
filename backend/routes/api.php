@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AdminEventController;
 use App\Http\Controllers\Api\V1\AdminEventGateAssignmentController;
 use App\Http\Controllers\Api\V1\AdminEventOptionsController;
 use App\Http\Controllers\Api\V1\AdminMetricsController;
+use App\Http\Controllers\Api\V1\AssignedGatesController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\GateManifestController;
 use App\Http\Controllers\Api\V1\SyncBatchController;
@@ -17,6 +18,9 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
     });
+
+    Route::get('/staff/gates', AssignedGatesController::class)
+        ->middleware(['auth:sanctum', 'role:security_staff']);
 
     Route::get('/gates/{gateId}/manifest', GateManifestController::class)
         ->middleware(['auth:sanctum', 'role:security_staff']);

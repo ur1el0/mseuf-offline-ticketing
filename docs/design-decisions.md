@@ -26,6 +26,7 @@ The supplied Ingress documents describe a related but different system. We adopt
 | Give retries stable client-generated IDs and define concurrency outcomes. | Adopt. Use this project's `scan_id`, `tickets`, `event_gates`, audit model, and offline reconciliation behavior. |
 | Include a practical secret-compromise threat model. | Adopt. Apply it to the existing encrypted TOTP seed and manifest flow; do not substitute the reference's opaque `ingress:v1` credential. |
 | Check authorization on the server and keep sensitive QR material out of logs. | Adopt. UI visibility is never a security boundary. |
+| Let staff choose from only their assigned events and gates, and configure the event server per device. | Adopt the usability pattern: `/staff/gates` returns assignment-scoped, non-secret metadata; the scanner can set and test its LAN API URL. The admission model remains governed by EUEvent’s offline TOTP and reconciliation decisions. |
 | Gate predictable demo accounts behind an explicit opt-in and forbid them in production. | Adopt as a rule if demo users are introduced. This does not mean such accounts or a demo mode currently exist. |
 | Replace React administration with Laravel Blade. | Reject. The approved client architecture is React + TypeScript; Laravel remains the API and domain layer. |
 | Fail closed whenever a scanner loses server connectivity. | Reject. The scanner must admit valid tickets offline against its assigned manifest and reconcile later. Cross-gate conflicts while disconnected are a known limitation and must be logged on sync. |
@@ -45,8 +46,8 @@ The supplied EUEvent Brand Identity guide defines the core palette and typograph
 | Saffron gradient | `#FFCB2F` to `#F2AE1D` | Primary actions and important focus states. |
 | Pure white | `#FFFFFF` | High-contrast text and light dashboard surfaces. |
 | Neon crimson maroon | Use the defined EUEvent asset/token where supplied; do not invent a hex value from the name alone. | Brand accent and selected states. |
-| Quicksand | UI typography. | Event information, controls, and navigation. |
-| Barlow | Brand typography. | Product wordmark and top-level brand treatment. |
+| Quicksand | Main interface typography. | Event information, controls, and navigation. |
+| Barlow | Header typography. | Screen titles, section headings, and product wordmark. |
 
 The brand guide calls for a dark, high-contrast visual system. The desktop Figma prototype also uses a light content canvas and white data cards; those are acceptable in the admin content area when the dark maroon navigation and EUEvent accents remain clear. Student and scanner surfaces should retain the dark, low-light-friendly treatment.
 
