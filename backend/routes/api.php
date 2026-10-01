@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AdminMetricsController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\GateManifestController;
 use App\Http\Controllers\Api\V1\SyncBatchController;
@@ -19,4 +20,7 @@ Route::prefix('v1')->group(function (): void {
 
     Route::post('/sync/batch', SyncBatchController::class)
         ->middleware(['auth:sanctum', 'role:security_staff']);
+
+    Route::get('/admin/metrics', AdminMetricsController::class)
+        ->middleware(['auth:sanctum', 'role:administrator']);
 });
