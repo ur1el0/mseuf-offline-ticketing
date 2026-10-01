@@ -14,19 +14,23 @@ interface RequestOptions {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(apiBaseUrl + path, {
     method: options.method ?? 'GET',
     headers: {
       Accept: 'application/json',
       ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+      ...(options.token ? { Authorization: 'Bearer ' + options.token } : {}),
     },
     ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
   });
-  const payload = await response.json().catch(() => null) as { message?: string } | null;
+  const payload = await response.json().catch(() => null) as {
+    message?: string;
+    errors?: Record<string, string[]>;
+  } | null;
 
   if (!response.ok) {
-    throw new ApiError(payload?.message || `Request failed (${response.status}).`, response.status);
+    const validationMessage = payload?.errors ? Object.values(payload.errors).flat()[0] : undefined;
+    throw new ApiError(validationMessage || payload?.message || 'Request failed (' + response.status + ').', response.status);
   }
 
   return payload as T;

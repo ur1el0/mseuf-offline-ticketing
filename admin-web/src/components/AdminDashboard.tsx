@@ -1,13 +1,14 @@
 import { useState, type CSSProperties } from 'react';
 import {
   Activity, AlertCircle, CalendarDays, CheckCheck, ChevronDown,
-  ClipboardList, DoorOpen, LogOut, RefreshCw, TicketCheck,
+  ClipboardList, DoorOpen, LogOut, RefreshCw, ShieldCheck, TicketCheck,
 } from 'lucide-react';
 import { useAdminMetrics } from '../hooks/useAdminMetrics';
 import type { AuthSession } from '../types';
 import { GateThroughputPanel } from './GateThroughputPanel';
 import { MetricCard } from './MetricCard';
 import { OperationalPanels } from './OperationalPanels';
+import { SecurityStaffManagement } from './SecurityStaffManagement';
 
 const number = new Intl.NumberFormat();
 
@@ -23,6 +24,7 @@ function formatTime(value: Date | null): string {
 
 export function AdminDashboard({ session, onSignOut, isSigningOut }: AdminDashboardProps) {
   const { data, error, isLoading, updatedAt, refresh } = useAdminMetrics(session.token);
+  const [activeView, setActiveView] = useState<'dashboard' | 'staff'>('dashboard');
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const admittedPercent = data && data.total_issued > 0
     ? Math.round((data.total_admitted / data.total_issued) * 100)
@@ -46,9 +48,14 @@ export function AdminDashboard({ session, onSignOut, isSigningOut }: AdminDashbo
         </a>
         <div className="sidebar-section-label">Workspace</div>
         <nav className="sidebar-nav" aria-label="Administrator navigation">
-          <a className="nav-item nav-item--active" href="#dashboard" aria-current="page">
+          <button className={activeView === 'dashboard' ? 'nav-item nav-item--active' : 'nav-item'} type="button"
+            onClick={() => setActiveView('dashboard')} aria-current={activeView === 'dashboard' ? 'page' : undefined}>
             <Activity size={19} /><span>Live dashboard</span>
-          </a>
+          </button>
+          <button className={activeView === 'staff' ? 'nav-item nav-item--active' : 'nav-item'} type="button"
+            onClick={() => setActiveView('staff')} aria-current={activeView === 'staff' ? 'page' : undefined}>
+            <ShieldCheck size={19} /><span>Security staff</span>
+          </button>
           <button className="nav-item nav-item--disabled" type="button" disabled title="Event setup and gate assignments are the next management module">
             <CalendarDays size={19} /><span>Events &amp; gates</span><small>Next</small>
           </button>
@@ -68,6 +75,7 @@ export function AdminDashboard({ session, onSignOut, isSigningOut }: AdminDashbo
       </aside>
 
       <main className="dashboard-main" id="dashboard">
+        {activeView === 'staff' ? <SecurityStaffManagement token={session.token} /> : <>
         <header className="dashboard-header">
           <div>
             <p className="eyebrow">MSEUF · VENUE OPERATIONS</p>
@@ -146,6 +154,7 @@ export function AdminDashboard({ session, onSignOut, isSigningOut }: AdminDashbo
           <span><DoorOpen size={15} /> Event and gate management is still being connected to the API.</span>
           <span>Refreshes every 10 seconds · Last update {formatTime(updatedAt)}</span>
         </footer>
+        </>}
       </main>
     </div>
   );

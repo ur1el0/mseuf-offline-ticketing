@@ -22,6 +22,7 @@
   .metrics-grid { gap: 10px; }
   .metric-card { min-height: 130px; padding: 14px; }
   .primary-panels-grid, .operations-grid { grid-template-columns: minmax(0, 1fr); }
+  .staff-grid { grid-template-columns: minmax(0, 1fr); }
   .gate-panel, .admission-panel { min-height: 0; }
   .dashboard-footer { flex-direction: column; }
   .login-layout { grid-template-columns: 1fr; }

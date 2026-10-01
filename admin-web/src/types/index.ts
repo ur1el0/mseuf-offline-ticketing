@@ -12,6 +12,12 @@ export interface AuthSession {
   user: User;
 }
 
+export interface SecurityStaff {
+  id: number;
+  name: string;
+  email: string;
+}
+
 export interface GateMetric {
   gate_id: number;
   name: string | null;
