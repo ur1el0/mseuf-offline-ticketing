@@ -3,9 +3,11 @@
 namespace App\Services\Sync;
 
 use App\Models\AuditLog;
+use App\Models\Event;
 use App\Models\EventGate;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Services\TicketQrVerificationService;
 
 class SyncScanProcessor
 {
@@ -15,11 +17,18 @@ class SyncScanProcessor
 
     private const REASON_TICKET_REVOKED = 'TICKET_REVOKED';
 
+    private const REASON_EVENT_NOT_ACTIVE = 'EVENT_NOT_ACTIVE';
+
+    private const REASON_INVALID_TICKET_CODE = 'INVALID_TICKET_CODE';
+
     private const REASON_GATE_MISMATCH = 'GATE_MISMATCH';
 
     private const REASON_SPLIT_BRAIN_COLLISION = 'SPLIT_BRAIN_COLLISION';
 
-    public function __construct(private readonly SyncScanRecorder $scanRecorder) {}
+    public function __construct(
+        private readonly SyncScanRecorder $scanRecorder,
+        private readonly TicketQrVerificationService $ticketQrVerificationService,
+    ) {}
 
     /**
      * @param array{
@@ -28,7 +37,9 @@ class SyncScanProcessor
      *     gate_id: int|string,
      *     scanned_at: int|string,
      *     is_override: bool|int|string,
-     *     event_configuration_version?: int|string|null
+     *     event_configuration_version?: int|string|null,
+     *     code_step: int|string,
+     *     code: string
      * } $scan
      */
     public function process(
@@ -37,8 +48,43 @@ class SyncScanProcessor
         EventGate $scannedGate,
         User $staff,
         string $deviceId,
-    ): bool {
+    ): array {
         $gateId = (int) $scan['gate_id'];
+        $reportedStep = (int) $scan['code_step'];
+        $scanTimeStep = intdiv((int) $scan['scanned_at'], 30_000);
+
+        if (abs($reportedStep - $scanTimeStep) > 1
+            || ! $this->ticketQrVerificationService->matches($ticket, $reportedStep, $scan['code'])) {
+            $this->scanRecorder->recordDecision(
+                $scan,
+                $scannedGate,
+                $staff,
+                $deviceId,
+                self::DECISION_REJECTED,
+                self::REASON_INVALID_TICKET_CODE,
+            );
+
+            return $this->result(self::DECISION_REJECTED, self::REASON_INVALID_TICKET_CODE);
+        }
+
+        $event = $scannedGate->event;
+        $wasScannedDuringCompletedEvent = $event->status === Event::STATUS_COMPLETED
+            && (int) $scan['scanned_at'] >= $event->starts_at->getTimestamp() * 1000
+            && (int) $scan['scanned_at'] <= $event->ends_at->getTimestamp() * 1000;
+
+        if (! in_array($event->status, [Event::STATUS_SCHEDULED, Event::STATUS_IN_PROGRESS], true)
+            && ! $wasScannedDuringCompletedEvent) {
+            $this->scanRecorder->recordDecision(
+                $scan,
+                $scannedGate,
+                $staff,
+                $deviceId,
+                self::DECISION_REJECTED,
+                self::REASON_EVENT_NOT_ACTIVE,
+            );
+
+            return $this->result(self::DECISION_REJECTED, self::REASON_EVENT_NOT_ACTIVE);
+        }
 
         if ((bool) $scan['is_override']) {
             $ticketStatusBefore = $ticket->status;
@@ -71,7 +117,7 @@ class SyncScanProcessor
                 ],
             );
 
-            return true;
+            return $this->result(self::DECISION_ACCEPTED, null, true);
         }
 
         if ($ticket->status === Ticket::STATUS_REVOKED) {
@@ -84,7 +130,7 @@ class SyncScanProcessor
                 self::REASON_TICKET_REVOKED,
             );
 
-            return false;
+            return $this->result(self::DECISION_REJECTED, self::REASON_TICKET_REVOKED);
         }
 
         if ((int) $ticket->event_gate_id !== $gateId) {
@@ -110,7 +156,7 @@ class SyncScanProcessor
                 ],
             );
 
-            return true;
+            return $this->result(self::DECISION_REJECTED, self::REASON_GATE_MISMATCH, true);
         }
 
         if ($ticket->status === Ticket::STATUS_CLAIMED) {
@@ -135,7 +181,7 @@ class SyncScanProcessor
                 ],
             );
 
-            return true;
+            return $this->result(self::DECISION_REJECTED, self::REASON_SPLIT_BRAIN_COLLISION, true);
         }
 
         $ticket->status = Ticket::STATUS_CLAIMED;
@@ -150,6 +196,18 @@ class SyncScanProcessor
             null,
         );
 
-        return false;
+        return $this->result(self::DECISION_ACCEPTED, null);
+    }
+
+    /**
+     * @return array{decision: string, reason_code: string|null, anomaly_logged: bool}
+     */
+    private function result(string $decision, ?string $reasonCode, bool $anomalyLogged = false): array
+    {
+        return [
+            'decision' => $decision,
+            'reason_code' => $reasonCode,
+            'anomaly_logged' => $anomalyLogged,
+        ];
     }
 }

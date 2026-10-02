@@ -12,7 +12,7 @@ class GateManifestResource extends JsonResource
     public static $wrap = null;
 
     /**
-     * @return array{gate_id: int, manifest_version: int, tickets: array<int, array{ticket_id: int, student_number: string|null, totp_secret: string, gate_id: int, status: string}>}
+     * @return array{gate_id: int, event_status: string, manifest_version: int, tickets: array<int, array{ticket_id: int, student_number: string|null, totp_secret: string, gate_id: int, status: string}>}
      */
     public function toArray(Request $request): array
     {
@@ -21,6 +21,7 @@ class GateManifestResource extends JsonResource
 
         return [
             'gate_id' => $eventGate->getKey(),
+            'event_status' => $eventGate->event->status,
             'manifest_version' => $eventGate->event->configuration_version,
             'tickets' => $eventGate->tickets
                 ->map(function (Ticket $ticket): array {

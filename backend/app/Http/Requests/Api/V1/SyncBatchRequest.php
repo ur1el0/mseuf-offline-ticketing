@@ -42,12 +42,14 @@ class SyncBatchRequest extends FormRequest
             'scans' => ['required', 'array', 'min:1', 'max:50'],
             'scans.*' => [
                 'required',
-                'array:scan_id,ticket_id,gate_id,scanned_at,is_override,event_configuration_version',
+                'array:scan_id,ticket_id,gate_id,scanned_at,is_override,event_configuration_version,code_step,code',
             ],
             'scans.*.scan_id' => ['required', 'uuid:4', 'distinct'],
             'scans.*.ticket_id' => ['required', 'integer', 'min:1', 'exists:tickets,id'],
             'scans.*.gate_id' => ['required', 'integer', 'min:1', 'exists:event_gates,id'],
             'scans.*.scanned_at' => ['required', 'integer', 'min:0', 'max:4102444800000'],
+            'scans.*.code_step' => ['required', 'integer', 'min:1', 'max:2147483647'],
+            'scans.*.code' => ['required', 'regex:/^\d{6}$/'],
             'scans.*.is_override' => ['required', 'boolean'],
             'scans.*.event_configuration_version' => [
                 'sometimes',

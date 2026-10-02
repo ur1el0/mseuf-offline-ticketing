@@ -1,0 +1,15 @@
+@import "tailwindcss";
+@import "./styles/base.css";
+@import "./styles/dashboard.css";
+@import "./styles/login.css";
+@import "./styles/responsive.css";
+
+@theme {
+  --color-brand-obsidian: #1c0808;
+  --color-brand-slate: #2a1010;
+  --color-brand-maroon: #481c1c;
+  --color-brand-saffron: #ffcb2f;
+  --color-brand-green: #20823a;
+  --color-canvas: #f4f1ef;
+  --font-sans: "Quicksand", "Nunito Sans", ui-sans-serif, system-ui, sans-serif;
+}
