@@ -30,6 +30,9 @@ This document records the API conventions for this project and marks which route
 | `PATCH /api/v1/admin/events/{event}` | Administrator | Updates details, schedule, or lifecycle status with a versioned change log. |
 | `PUT /api/v1/admin/events/{event}/gates` | Administrator | Replaces draft assignments or adds gates/staff after scheduling while preserving existing offline scanner assignments. |
 | `POST /api/v1/admin/events/{event}/tickets` | Administrator | Issues or reissues a ticket to an existing student account for a gate assigned to the event. |
+| `GET /api/v1/admin/students` | Administrator | Returns a paginated student directory with optional name, email, or student-number search. |
+| `POST /api/v1/admin/students` | Administrator | Creates a student account with a server-assigned student role and hashed initial password. |
+| `GET /api/v1/admin/activity-logs` | Administrator | Returns recent account, event-change, scan-decision, and anomaly activity with filters. |
 
 For exact response fields, inspect the matching Laravel controller and API Resource. The login response currently has `token` and `user`; it does not promise the extra `token_type`, `email`, `created_at`, or `student_id` fields shown in the reference. The metrics resource currently reports `pending_sync_estimate: null` because scanner heartbeat counts are not implemented. Clients must render this as unavailable, not zero.
 
@@ -97,7 +100,7 @@ The client encrypts queued records in SQLite, sends at most 50 per request, and 
 
 ## Routes still to design
 
-The current backend does **not** yet expose the full product API. Complete filterable audit-log browsing and scanner heartbeat/pending-sync telemetry remain planned. Do not present those capabilities as implemented. Do not copy the reference's `registrations`, `access_points`, `/me/tickets`, or `/staff/events/.../admissions` names without a deliberate schema and ADR review.
+The current backend does **not** yet expose the full product API. Historical audit export/cursor pagination, student password change/reset, and scanner heartbeat/pending-sync telemetry remain planned. The current activity endpoint is limited to the newest 100 matching records. Do not present the future capabilities as implemented. Do not copy the reference's `registrations`, `access_points`, `/me/tickets`, or `/staff/events/.../admissions` names without a deliberate schema and ADR review.
 
 ## Rules for new endpoints
 
@@ -126,3 +129,11 @@ Validation errors use Laravel's JSON `message` and `errors` fields. For scanner 
 ## Contract review checklist
 
 Before merging a new API change, verify that the route's role and resource scope are enforced in Laravel; the response does not expose unrelated student data or secrets; retries cannot double-apply a scan; and the route is listed as implemented here only after its code exists. Never commit `.env` files, Supabase keys, mobile secrets, or production tokens.
+
+## Administrator student accounts and activity
+
+`GET /api/v1/admin/students` accepts optional `search`, `page`, and `per_page` query parameters. `per_page` is capped at 100. The response contains `students` with `id`, `name`, `email`, `student_number`, and `created_at`, plus pagination metadata (`current_page`, `per_page`, `last_page`, `total`). Search matches name, institutional email, or student number. Only student-role accounts are returned.
+
+`POST /api/v1/admin/students` accepts `name`, `email`, `student_number`, `password`, and `password_confirmation`; the role is fixed to `student` by Laravel. Email is lowercased, identifiers are unique, and passwords must be at least 12 characters. Account creation and its activity record share one transaction. The 201 response contains the student resource only; the password is never returned or logged. Administrators must deliver the initial password through an approved private channel.
+
+`GET /api/v1/admin/activity-logs` accepts `type` (`all`, `account`, `event_change`, `scan`, or `anomaly`), `event_id`, inclusive `from`/`to` dates, and `limit` (default 50, maximum 100). It returns `entries`, `has_more`, and the effective `limit`. Entries include source-prefixed `id`, type/action/outcome, event and actor summaries, a subject label, optional detail, and server-side `occurred_at`. Account provisioning entries have no event association. The feed omits credentials, TOTP material, QR proofs, ticket IDs, and device identifiers.
