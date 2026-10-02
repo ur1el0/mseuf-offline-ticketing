@@ -192,3 +192,21 @@ Requires the `administrator` role. Request:
 ```
 
 The student account must already exist and have the `student` role. The gate must belong to the selected event. Issuance enforces the gate's configured capacity and prevents duplicate active tickets; a revoked ticket may be reissued with a newly generated secret. The operation locks the event and gate rows, increments the event configuration version, and records a `ticket_issued` change log. The 201 response contains the ticket ID, student number, gate ID, status, and configuration version, but never the secret. Validation and capacity conflicts return 422.
+
+## 8. Administrator Student Accounts and Activity Feed
+
+All endpoints in this section require a Sanctum bearer token and the `administrator` role. These contracts are defined before the admin web screens are connected.
+
+### `GET /api/v1/admin/students`
+
+Returns a paginated directory of student accounts. Optional query fields are `search` (matches student number, name, or email), `page` (default 1), and `per_page` (default 25, maximum 100). The response is `{ "students": [{ "id", "name", "email", "student_number", "created_at" }], "meta": { "current_page", "per_page", "last_page", "total" } }`. Only users with the `student` role are included.
+
+### `POST /api/v1/admin/students`
+
+Creates a student account and returns HTTP 201 with `{ "student": { "id", "name", "email", "student_number", "created_at" } }`. Request fields are `name`, institutional `email`, `student_number`, `password`, and `password_confirmation`. The server assigns the `student` role; clients cannot select a role. Email is normalized to lowercase, and student number and email must be unique. Passwords require at least 12 characters and are hashed by Laravel. The response and activity log never include the password. The administrator must deliver the initial password through an approved private channel; a student password-change/reset flow remains future work. The creation and its `student_account_created` activity entry are committed in one transaction.
+
+### `GET /api/v1/admin/activity-logs`
+
+Returns recent system activity from student/staff account creation, event configuration changes, scan decisions, and scanner anomalies. Optional query fields: `type` (`all`, `account`, `event_change`, `scan`, or `anomaly`), `event_id`, `from`, `to` (inclusive calendar dates in `YYYY-MM-DD` format), and `limit` (default 50, maximum 100). Each entry contains a source-prefixed `id`, `type`, `action`, `outcome`, nullable `event` and `actor` summaries, `subject`, nullable `detail`, and ISO-8601 `occurred_at`. Account entries are not associated with an event and therefore do not appear when `event_id` is supplied. The feed omits passwords, bearer tokens, TOTP seeds, QR proofs, ticket IDs, and student secrets. It is a recent activity view capped at 100 entries; historical export and cursor pagination are future work.
+
+The dedicated `admin_activity_logs` table records account provisioning; event changes remain in `event_change_logs`, admissions and rejections in `scan_logs`, and security anomalies in `audit_logs`. This feed reads those sources and does not mutate them.
