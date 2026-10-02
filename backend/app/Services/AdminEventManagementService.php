@@ -4,9 +4,12 @@ namespace App\Services;
 
 use App\Models\Event;
 use App\Models\EventChangeLog;
+use App\Models\Ticket;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -17,8 +20,7 @@ class AdminEventManagementService
      */
     public function listEvents(): Collection
     {
-        return Event::query()
-            ->with(['venue', 'eventGates.venueGate', 'eventGates.staffAssignments.user'])
+        return $this->eventQuery()
             ->orderByDesc('starts_at')
             ->orderByDesc('id')
             ->limit(100)
@@ -27,9 +29,23 @@ class AdminEventManagementService
 
     public function loadEvent(Event $event): Event
     {
-        return Event::query()
-            ->with(['venue', 'eventGates.venueGate', 'eventGates.staffAssignments.user'])
-            ->findOrFail($event->getKey());
+        return $this->eventQuery()->findOrFail($event->getKey());
+    }
+
+    private function eventQuery(): Builder
+    {
+        return Event::query()->with([
+            'venue',
+            'eventGates' => static function (HasMany $query): void {
+                $query->withCount([
+                    'tickets as active_tickets_count' => static function (Builder $tickets): void {
+                        $tickets->whereIn('status', [Ticket::STATUS_ISSUED, Ticket::STATUS_CLAIMED]);
+                    },
+                ]);
+            },
+            'eventGates.venueGate',
+            'eventGates.staffAssignments.user',
+        ]);
     }
 
     /**

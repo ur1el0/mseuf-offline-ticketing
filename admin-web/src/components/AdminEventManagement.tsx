@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { AlertCircle, CalendarDays, Check, Clock3, DoorOpen, Loader2, Plus, Save, ShieldCheck } from 'lucide-react';
+import { AlertCircle, CalendarDays, Check, Clock3, DoorOpen, Loader2, Plus, Save, ShieldCheck, TicketCheck } from 'lucide-react';
 import { apiRequest } from '../services/apiClient';
 import type { SecurityStaff } from '../types';
 
@@ -24,6 +24,7 @@ interface EventGate {
   code: string | null;
   name: string | null;
   capacity: number | null;
+  ticket_count: number;
   security_staff: SecurityStaff[];
 }
 
@@ -150,6 +151,9 @@ export function AdminEventManagement({ token }: AdminEventManagementProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [isSavingEvent, setIsSavingEvent] = useState(false);
   const [isSavingGates, setIsSavingGates] = useState(false);
+  const [ticketStudentNumber, setTicketStudentNumber] = useState('');
+  const [ticketGateId, setTicketGateId] = useState('');
+  const [isIssuingTicket, setIsIssuingTicket] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -232,6 +236,8 @@ export function AdminEventManagement({ token }: AdminEventManagementProps) {
     setStatusDraft(selectedEvent.status);
     setEventReason('');
     setGateReason('');
+    setTicketStudentNumber('');
+    setTicketGateId(String(selectedEvent.event_gates[0]?.id ?? ''));
     setGateDraft(selectedEvent.event_gates.map((gate) => ({
       venueGateId: gate.venue_gate_id,
       capacity: gate.capacity === null ? '' : String(gate.capacity),
@@ -361,6 +367,50 @@ export function AdminEventManagement({ token }: AdminEventManagementProps) {
       setError(cause instanceof Error ? cause.message : 'Could not save gate assignments.');
     } finally {
       setIsSavingGates(false);
+    }
+  }
+
+  async function issueTicket(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!selectedEvent || !ticketGateId.trim()) {
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+    setIsIssuingTicket(true);
+
+    try {
+      const result = await apiRequest<{
+        configuration_version: number;
+        ticket: { id: number; student_number: string; event_gate_id: number; status: string };
+      }>('/admin/events/' + selectedEvent.id + '/tickets', {
+        method: 'POST',
+        token,
+        body: {
+          student_number: ticketStudentNumber.trim(),
+          event_gate_id: Number(ticketGateId),
+        },
+      });
+
+      setEvents((current) => current.map((eventItem) => eventItem.id !== selectedEvent.id
+        ? eventItem
+        : {
+          ...eventItem,
+          configuration_version: result.configuration_version,
+          event_gates: eventItem.event_gates.map((gate) => gate.id !== result.ticket.event_gate_id
+            ? gate
+            : { ...gate, ticket_count: gate.ticket_count + 1 }),
+        }));
+      setTicketStudentNumber('');
+      const isEntryOpen = selectedEvent.status === 'scheduled' || selectedEvent.status === 'in_progress';
+      setNotice(isEntryOpen
+        ? 'Ticket #' + result.ticket.id + ' issued to student ' + result.ticket.student_number + '. They can refresh the mobile app to display it.'
+        : 'Ticket #' + result.ticket.id + ' issued to student ' + result.ticket.student_number + '. Its rotating pass becomes available after the event is scheduled.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not issue the ticket.');
+    } finally {
+      setIsIssuingTicket(false);
     }
   }
 
@@ -584,6 +634,36 @@ export function AdminEventManagement({ token }: AdminEventManagementProps) {
                       {isSavingGates ? <><Loader2 size={16} className="spin" /> Saving…</> : <><Save size={16} /> Save gate assignments</>}
                     </button>
                   )}
+                </form>
+              )}
+            </section>
+
+            <section className="surface-card panel ticket-issuance-panel" aria-labelledby="ticket-issuance-title">
+              <div className="panel-heading">
+                <div><span className="eyebrow">Student access</span><h2 id="ticket-issuance-title">Issue a ticket</h2></div>
+                <span className="panel-icon"><TicketCheck size={19} /></span>
+              </div>
+              {selectedEvent.event_gates.length === 0 ? (
+                <p className="event-empty-copy">Assign at least one event gate before issuing student tickets.</p>
+              ) : (
+                <form className="event-form ticket-issuance-form" onSubmit={(event) => void issueTicket(event)}>
+                  <label htmlFor="ticket-student-number">Student number</label>
+                  <input id="ticket-student-number" maxLength={32} required value={ticketStudentNumber}
+                    placeholder="e.g. 2026-00001"
+                    onChange={(event) => setTicketStudentNumber(event.target.value)} />
+                  <label htmlFor="ticket-event-gate">Event gate</label>
+                  <select id="ticket-event-gate" required value={ticketGateId}
+                    onChange={(event) => setTicketGateId(event.target.value)}>
+                    {selectedEvent.event_gates.map((gate) => (
+                      <option value={gate.id} key={gate.id}>
+                        {(gate.code ?? 'Gate') + ' · ' + (gate.name ?? 'Unnamed gate') + ' · ' + gate.ticket_count + (gate.capacity === null ? '' : '/' + gate.capacity) + ' tickets'}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="ticket-issuance-note">The student account must already exist. Ticket secrets are delivered only to that student’s authenticated mobile app.</p>
+                  <button className="event-primary-button" type="submit" disabled={isIssuingTicket || isSelectedEventFrozen || !ticketStudentNumber.trim()}>
+                    {isIssuingTicket ? <><Loader2 size={16} className="spin" /> Issuing…</> : <><TicketCheck size={16} /> Issue student ticket</>}
+                  </button>
                 </form>
               )}
             </section>

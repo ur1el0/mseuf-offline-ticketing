@@ -3,11 +3,13 @@
 use App\Http\Controllers\Api\V1\AdminEventController;
 use App\Http\Controllers\Api\V1\AdminEventGateAssignmentController;
 use App\Http\Controllers\Api\V1\AdminEventOptionsController;
+use App\Http\Controllers\Api\V1\AdminEventTicketController;
 use App\Http\Controllers\Api\V1\AdminMetricsController;
 use App\Http\Controllers\Api\V1\AdminSecurityStaffController;
 use App\Http\Controllers\Api\V1\AssignedGatesController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\GateManifestController;
+use App\Http\Controllers\Api\V1\StudentTicketController;
 use App\Http\Controllers\Api\V1\SyncBatchController;
 use Illuminate\Support\Facades\Route;
 
@@ -19,6 +21,9 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
     });
+
+    Route::get('/student/tickets', StudentTicketController::class)
+        ->middleware(['auth:sanctum', 'role:student']);
 
     Route::get('/staff/gates', AssignedGatesController::class)
         ->middleware(['auth:sanctum', 'role:security_staff']);
@@ -40,6 +45,9 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('/events/{event}', [AdminEventController::class, 'update'])->whereNumber('event');
         Route::put('/events/{event}/gates', [AdminEventGateAssignmentController::class, 'update'])
             ->whereNumber('event');
+        Route::post('/events/{event}/tickets', [AdminEventTicketController::class, 'store'])
+            ->whereNumber('event')
+            ->middleware('throttle:30,1');
     });
 
     Route::get('/admin/metrics', AdminMetricsController::class)

@@ -41,6 +41,7 @@ class EventResource extends JsonResource
                         'code' => $eventGate->venueGate?->code,
                         'name' => $eventGate->venueGate?->name,
                         'capacity' => $eventGate->capacity,
+                        'ticket_count' => (int) ($eventGate->active_tickets_count ?? 0),
                         'security_staff' => $eventGate->staffAssignments
                             ->map(static function (EventGateStaffAssignment $assignment): array {
                                 return [
