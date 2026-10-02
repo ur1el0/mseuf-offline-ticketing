@@ -9,7 +9,7 @@ const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$
 
 interface RequestOptions {
   token?: string;
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH';
   body?: unknown;
 }
 

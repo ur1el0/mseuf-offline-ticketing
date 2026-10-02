@@ -23,6 +23,9 @@
   .metric-card { min-height: 130px; padding: 14px; }
   .primary-panels-grid, .operations-grid { grid-template-columns: minmax(0, 1fr); }
   .staff-grid { grid-template-columns: minmax(0, 1fr); }
+  .events-layout { grid-template-columns: minmax(0, 1fr); }
+  .event-create-form { grid-template-columns: minmax(0, 1fr); }
+  .event-create-form label, .event-create-form input, .event-create-form select, .event-create-form textarea, .event-create-form .event-primary-button { grid-column: 1; }
   .gate-panel, .admission-panel { min-height: 0; }
   .dashboard-footer { flex-direction: column; }
   .login-layout { grid-template-columns: 1fr; }
