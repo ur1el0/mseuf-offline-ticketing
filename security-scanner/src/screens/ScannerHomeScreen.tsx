@@ -11,7 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { CheckCircle2, CloudDownload, CloudOff, LogOut, MapPin, RefreshCw, Settings2, ShieldCheck, TicketCheck, Wifi } from 'lucide-react-native';
+import { Camera, CheckCircle2, CloudDownload, CloudOff, CloudUpload, LogOut, MapPin, RefreshCw, Settings2, ShieldCheck, TicketCheck, Wifi } from 'lucide-react-native';
 import { useSecuritySession } from '../hooks/useSecuritySession';
 import { fetchAssignedGates, type AssignedGate } from '../services/assignedGates';
 import { ApiError } from '../services/apiClient';
@@ -22,7 +22,11 @@ import {
   saveOfflineGateManifest,
   summarizeOfflineGateManifest,
   type CachedManifestSummary,
+  type OfflineGateManifest,
 } from '../services/offlineManifestStore';
+import { countPendingScans } from '../services/offlineScanQueue';
+import { syncPendingScans } from '../services/scanSync';
+import { GateScanModal } from './GateScanModal';
 import { colors, fonts } from '../theme';
 
 export function ScannerHomeScreen() {
@@ -30,6 +34,11 @@ export function ScannerHomeScreen() {
   const { token, serverUrl, signOut: endSession } = session;
   const [assignments, setAssignments] = useState<AssignedGate[]>([]);
   const [cachedManifests, setCachedManifests] = useState<Record<number, CachedManifestSummary>>({});
+  const [offlineManifests, setOfflineManifests] = useState<Record<number, OfflineGateManifest>>({});
+  const [selectedScanGateId, setSelectedScanGateId] = useState<number | null>(null);
+  const [pendingScansCount, setPendingScansCount] = useState(0);
+  const [isSyncingScans, setIsSyncingScans] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
   const [message, setMessage] = useState('');
   const [isOffline, setIsOffline] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,6 +47,39 @@ export function ScannerHomeScreen() {
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const staffId = session.user?.id;
+
+  const refreshQueue = useCallback(async (attemptSync = false) => {
+    if (!staffId) {
+      setPendingScansCount(0);
+      return;
+    }
+
+    try {
+      let pendingCount = await countPendingScans(serverUrl, staffId);
+      setPendingScansCount(pendingCount);
+      if (attemptSync && pendingCount > 0 && token) {
+        setIsSyncingScans(true);
+        setSyncMessage('');
+        try {
+          const summary = await syncPendingScans(token, serverUrl, staffId);
+          pendingCount = await countPendingScans(serverUrl, staffId);
+          setPendingScansCount(pendingCount);
+          if (summary.accepted || summary.rejected) {
+            setSyncMessage(summary.rejected
+              ? `${summary.accepted} accepted · ${summary.rejected} rejected (${summary.reasons.join(', ')})`
+              : `${summary.accepted} offline ${summary.accepted === 1 ? 'scan' : 'scans'} synchronized`);
+          }
+        } catch {
+          setSyncMessage('Scans remain encrypted on this device and will retry when the server is reachable.');
+        } finally {
+          setIsSyncingScans(false);
+        }
+      }
+    } catch (cause) {
+      setSyncMessage(cause instanceof Error ? cause.message : 'Could not read the local scan queue.');
+    }
+  }, [serverUrl, staffId, token]);
+
   const loadAssignments = useCallback(async (showRefresh = false) => {
     if (!token || !staffId) return;
     setIsRefreshing(showRefresh);
@@ -46,12 +88,14 @@ export function ScannerHomeScreen() {
 
     try {
       savedManifests = await loadOfflineGateManifests(serverUrl, staffId);
+      setOfflineManifests(Object.fromEntries(savedManifests.map((snapshot) => [snapshot.assignment.gate_id, snapshot])));
       setCachedManifests(Object.fromEntries(savedManifests.map((snapshot) => [
         snapshot.assignment.gate_id,
         summarizeOfflineGateManifest(snapshot),
       ])));
     } catch {
       setCachedManifests({});
+      setOfflineManifests({});
     }
 
     try {
@@ -70,10 +114,11 @@ export function ScannerHomeScreen() {
         setMessage(cause instanceof Error ? cause.message : 'Could not load gate assignments.');
       }
     } finally {
+      await refreshQueue(true);
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [endSession, serverUrl, staffId, token]);
+  }, [endSession, refreshQueue, serverUrl, staffId, token]);
 
   useEffect(() => {
     void Promise.resolve().then(() => loadAssignments());
@@ -90,6 +135,7 @@ export function ScannerHomeScreen() {
         assignment,
         manifest,
       );
+      setOfflineManifests((current) => ({ ...current, [assignment.gate_id]: snapshot }));
       setCachedManifests((current) => ({
         ...current,
         [assignment.gate_id]: summarizeOfflineGateManifest(snapshot),
@@ -109,12 +155,34 @@ export function ScannerHomeScreen() {
   }
 
   async function signOut() {
+    if (staffId && pendingScansCount > 0) {
+      Alert.alert(
+        'Scans are waiting to sync',
+        `${pendingScansCount} validated ${pendingScansCount === 1 ? 'scan is' : 'scans are'} still encrypted on this device. Signing out keeps them here for this staff account to sync later.`,
+        [
+          { text: 'Stay signed in', style: 'cancel' },
+          {
+            text: 'Sign out',
+            style: 'destructive',
+            onPress: () => {
+              setIsSigningOut(true);
+              void endSession().finally(() => setIsSigningOut(false));
+            },
+          },
+        ],
+      );
+      return;
+    }
     setIsSigningOut(true);
-    await session.signOut();
+    await endSession();
     setIsSigningOut(false);
   }
 
+  const selectedAssignment = assignments.find((assignment) => assignment.gate_id === selectedScanGateId);
+  const selectedManifest = selectedScanGateId === null ? undefined : offlineManifests[selectedScanGateId];
+
   return (
+    <>
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.content}
@@ -166,6 +234,18 @@ export function ScannerHomeScreen() {
         <View style={styles.loadingCard}><ActivityIndicator color={colors.gold} /><Text style={styles.loadingText}>Loading your gate assignments…</Text></View>
       ) : null}
       {message ? <Text accessibilityRole="alert" style={styles.error}>{message}</Text> : null}
+      {pendingScansCount > 0 ? (
+        <View style={styles.pendingQueue}>
+          <View style={styles.pendingQueueCopy}>
+            <Text style={styles.pendingQueueTitle}>{pendingScansCount} {pendingScansCount === 1 ? 'scan' : 'scans'} waiting to sync</Text>
+            <Text style={styles.pendingQueueText}>{syncMessage || 'The saved scan queue is encrypted on this device.'}</Text>
+          </View>
+          <Pressable onPress={() => void refreshQueue(true)} disabled={isSyncingScans} style={styles.syncButton}>
+            {isSyncingScans ? <ActivityIndicator color={colors.background} size="small" /> : <CloudUpload size={15} color={colors.background} />}
+            <Text style={styles.syncButtonText}>{isSyncingScans ? 'Syncing' : 'Sync'}</Text>
+          </Pressable>
+        </View>
+      ) : syncMessage ? <Text style={styles.syncMessage}>{syncMessage}</Text> : null}
       {!isLoading && !message && assignments.length === 0 ? (
         <View style={styles.emptyCard}>
           <View style={styles.emptyIcon}><MapPin size={22} color={colors.gold} /></View>
@@ -180,6 +260,8 @@ export function ScannerHomeScreen() {
           cachedManifest={cachedManifests[assignment.gate_id]}
           isDownloading={downloadingGateId === assignment.gate_id}
           isOffline={isOffline}
+          canScan={Boolean(offlineManifests[assignment.gate_id])}
+          onScan={() => setSelectedScanGateId(assignment.gate_id)}
           onDownload={() => void downloadManifest(assignment)}
         />
       ))}
@@ -201,7 +283,7 @@ export function ScannerHomeScreen() {
         <View style={styles.noticeIcon}><CloudOff size={17} color={colors.gold} /></View>
         <View style={styles.noticeCopy}>
           <Text style={styles.noticeTitle}>Prepare each gate before doors open</Text>
-          <Text style={styles.noticeBody}>Downloaded manifests are encrypted on this device. This build still needs QR validation and scan syncing before it can approve entry offline.</Text>
+          <Text style={styles.noticeBody}>Download the current ticket manifest while online. QR codes are checked on this phone; encrypted scan records sync when the event server is reachable.</Text>
         </View>
       </View>
       <Pressable
@@ -215,7 +297,10 @@ export function ScannerHomeScreen() {
               style: 'destructive',
               onPress: () => {
                 void clearOfflineGateManifests()
-                  .then(() => setCachedManifests({}))
+                  .then(() => {
+                    setCachedManifests({});
+                    setOfflineManifests({});
+                  })
                   .catch(() => Alert.alert('Could not clear manifests', 'Please try again.'));
               },
             },
@@ -228,6 +313,19 @@ export function ScannerHomeScreen() {
       </Pressable>
       <Text style={styles.footer}>EUEvent · Secure entry operations</Text>
     </ScrollView>
+    {selectedAssignment && selectedManifest ? (
+      <GateScanModal
+        visible
+        assignment={selectedAssignment}
+        snapshot={selectedManifest}
+        serverUrl={serverUrl}
+        staffId={staffId ?? 0}
+        token={token ?? ''}
+        onClose={() => setSelectedScanGateId(null)}
+        onQueueChanged={() => void refreshQueue(false)}
+      />
+    ) : null}
+    </>
   );
 }
 
@@ -236,12 +334,16 @@ function AssignmentCard({
   cachedManifest,
   isDownloading,
   isOffline,
+  canScan,
+  onScan,
   onDownload,
 }: {
   assignment: AssignedGate;
   cachedManifest?: CachedManifestSummary;
   isDownloading: boolean;
   isOffline: boolean;
+  canScan: boolean;
+  onScan: () => void;
   onDownload: () => void;
 }) {
   const statusLabel = assignment.event_status.replace('_', ' ');
@@ -287,19 +389,27 @@ function AssignmentCard({
             <Text style={styles.manifestMeta}>No offline manifest saved for this gate yet.</Text>
           )}
         </View>
-        <Pressable
-          onPress={onDownload}
-          disabled={isDownloading || isOffline || !isActive}
-          accessibilityRole="button"
-          style={[styles.downloadButton, (isDownloading || isOffline || !isActive) && styles.downloadButtonDisabled]}
-        >
-          {isDownloading
-            ? <ActivityIndicator color={colors.background} size="small" />
-            : <CloudDownload size={15} color={colors.background} />}
-          <Text style={styles.downloadButtonText}>
-            {isDownloading ? 'Saving' : cachedManifest ? 'Update' : 'Prepare'}
-          </Text>
-        </Pressable>
+        <View style={styles.manifestActions}>
+          {canScan ? (
+            <Pressable onPress={onScan} disabled={!isActive} accessibilityRole="button" style={[styles.scanButton, !isActive && styles.downloadButtonDisabled]}>
+              <Camera size={15} color={colors.gold} />
+              <Text style={styles.scanButtonText}>Scan</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={onDownload}
+            disabled={isDownloading || isOffline || !isActive}
+            accessibilityRole="button"
+            style={[styles.downloadButton, (isDownloading || isOffline || !isActive) && styles.downloadButtonDisabled]}
+          >
+            {isDownloading
+              ? <ActivityIndicator color={colors.background} size="small" />
+              : <CloudDownload size={15} color={colors.background} />}
+            <Text style={styles.downloadButtonText}>
+              {isDownloading ? 'Saving' : cachedManifest ? 'Update' : 'Prepare'}
+            </Text>
+          </Pressable>
+        </View>
       </View>
       {!isActive ? <Text style={styles.manifestUnavailable}>Manifests are available when the event is scheduled or in progress.</Text> : null}
     </View>
@@ -380,6 +490,9 @@ const styles = StyleSheet.create({
   statLabel: { color: colors.muted, fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 1 },
   statValue: { color: colors.text, fontFamily: fonts.bodyStrong, fontSize: 12 },
   manifestRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderTopWidth: 1, borderTopColor: colors.border, marginTop: 14, paddingTop: 12 },
+  manifestActions: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  scanButton: { minHeight: 39, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.surfaceRaised },
+  scanButtonText: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 10 },
   manifestCopy: { flex: 1, gap: 4 },
   manifestReady: { color: colors.green, fontFamily: fonts.bodyBold, fontSize: 10 },
   manifestMeta: { color: colors.muted, fontFamily: fonts.bodyRegular, fontSize: 9, lineHeight: 14 },
@@ -401,6 +514,13 @@ const styles = StyleSheet.create({
   checkBadgeText: { fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 0.7 },
   checkBadgeTextDone: { color: colors.green },
   checkBadgeTextPending: { color: colors.gold },
+  pendingQueue: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 13, borderRadius: 17, backgroundColor: '#33250D', borderWidth: 1, borderColor: '#6B5018', marginBottom: 14 },
+  pendingQueueCopy: { flex: 1, gap: 3 },
+  pendingQueueTitle: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 12 },
+  pendingQueueText: { color: '#E6D5AA', fontFamily: fonts.bodyRegular, fontSize: 10, lineHeight: 14 },
+  syncButton: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 11, borderRadius: 13, backgroundColor: colors.gold },
+  syncButtonText: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 10 },
+  syncMessage: { color: colors.muted, fontFamily: fonts.bodyRegular, fontSize: 10, marginBottom: 12 },
   offlineNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 14, borderRadius: 18, backgroundColor: '#33250D', borderWidth: 1, borderColor: '#6B5018' },
   noticeIcon: { width: 30, height: 30, borderRadius: 11, backgroundColor: '#49340E', alignItems: 'center', justifyContent: 'center' },
   noticeCopy: { flex: 1, gap: 4 },

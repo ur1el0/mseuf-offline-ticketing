@@ -12,7 +12,6 @@ export type StudentTicket = {
   event: {
     id: number;
     name: string;
-    description: string | null;
     starts_at: string;
     ends_at: string;
     status: 'draft' | 'scheduled' | 'in_progress' | 'postponed' | 'cancelled' | 'completed';
@@ -56,7 +55,6 @@ export function isStudentTicket(value: unknown): value is StudentTicket {
     && event !== null
     && Number.isInteger(event.id)
     && typeof event.name === 'string'
-    && (typeof event.description === 'string' || event.description === null)
     && typeof event.starts_at === 'string'
     && typeof event.ends_at === 'string'
     && typeof event.venue_name === 'string'

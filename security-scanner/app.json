@@ -22,6 +22,13 @@
     "scheme": "euevent-scanner",
     "plugins": [
       "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "EUEvent Scanner uses the camera to validate student entry tickets.",
+          "recordAudioAndroid": false
+        }
+      ],
       "expo-secure-store",
       "expo-sqlite"
     ],
