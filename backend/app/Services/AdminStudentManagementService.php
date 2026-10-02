@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 class AdminStudentManagementService
 {
     /**
-     * @param array{search?: string|null, page?: int|string, per_page?: int|string} $filters
+     * @param  array{search?: string|null, page?: int|string, per_page?: int|string}  $filters
      */
     public function index(array $filters): LengthAwarePaginator
     {
