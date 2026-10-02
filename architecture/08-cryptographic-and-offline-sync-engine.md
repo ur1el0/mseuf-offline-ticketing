@@ -21,22 +21,23 @@ Attendee smartphone clocks are untrusted. If an attendee deliberately rolls back
 
 During network instability, HTTP acknowledgments are often dropped. 
 * To prevent duplicate counts or false double-spending alarms, the mobile scanner assigns a UUID v4 `scan_id` at the moment of scan.
-* If a network batch fails to receive a `200 OK`, the client retries the same `scan_id`.
-* The server recognizes the existing `scan_id` via `UNIQUE (scan_id)` and returns a successful acknowledgment without re-incrementing gate counts or creating false collision alerts.
+* If a network batch fails to receive a `200 OK`, the client retries the same `scan_id` and one-time QR proof.
+* The server recognizes the existing `scan_id` via `UNIQUE (scan_id)` and returns its original decision without re-incrementing gate counts or creating false collision alerts.
+* QR code/step values are checked against the ticket's decrypted secret during reconciliation and never written to scan logs. They are erased from the local queue after acknowledgment.
 
 ---
 
-## 3. Opportunistic Heartbeat Sync Pipeline
+## 3. Opportunistic Sync
 
 ```
 [ Local Scanner Engine ]
          │
          ▼
-[ Network Listener: NetInfo / Fetch Check ]
+[ Scanner open / refresh / explicit sync action ]
          │
-         ├── Offline ──────> Sleep 15s; keep buffering scans in pending_sync_queue
+         ├── Offline ──────> Keep encrypting validated scans in the local queue
          │
-         └── Online ───────> Fetch 25–50 un-synced rows (synced == 0)
+         └── Reachable ────> Fetch up to 50 pending rows
                                  │
                                  ▼
                      [ POST /api/v1/sync/batch ]
@@ -45,6 +46,13 @@ During network instability, HTTP acknowledgments are often dropped.
                      ▼                       ▼
               [ 200 OK ]              [ Network Drop ]
                      │                       │
-      UPDATE pending_sync_queue       Keep synced == 0;
-      SET synced = 1 WHERE scan_id IN (?)   Retry next heartbeat cycle
+       Store server decisions;       Keep encrypted rows pending;
+       erase code proof locally      retry with the same scan IDs
 ```
+
+
+## 4. Encrypted Client Replica Storage
+
+The scanner's gate manifest and pending scan payloads are encrypted with AES-256-GCM before they are written to SQLite. The encryption key is stored separately in Expo SecureStore. SQLite contains ciphertext, queue IDs, keyed ticket fingerprints, and sync state, but not plaintext TOTP seeds or one-time QR codes. After a server acknowledgment, the local row keeps only its duplicate-prevention fingerprint and server decision; its encrypted payload is erased.
+
+A database-only compromise exposes ciphertext, scan counts, and limited queue metadata. A compromise that also exposes the SecureStore key can reveal cached gate TOTP seeds and unsynchronized scan records. Local offline acceptance cannot learn about event cancellation or postponement until the device reconnects; the server returns an explicit rejection at reconciliation.

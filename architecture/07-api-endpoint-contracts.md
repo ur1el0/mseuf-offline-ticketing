@@ -36,12 +36,12 @@ Downloads the partitioned manifest for a specific gate prior to event ingress.
   {
     "gate_id": 1,
     "event_status": "scheduled",
-  "manifest_version": 1,
+    "manifest_version": 1,
     "tickets": [
       {
         "ticket_id": 10492,
         "student_number": "2023-01042",
-        "totp_secret": "JBSWY3DPEHPK3PXP",
+        "totp_secret": "0123456789abcdef0123456789abcdef01234567",
         "gate_id": 1,
         "status": "unclaimed"
       }
@@ -54,7 +54,7 @@ Downloads the partitioned manifest for a specific gate prior to event ingress.
 ## 3. Opportunistic Batch Sync
 
 ### `POST /api/v1/sync/batch`
-Receives compressed batches of 25–50 un-synced scan records from mobile scanners.
+Receives batches of up to 50 encrypted-at-rest scanner records. Each record includes the QR time-step and one-time code so the server can verify the HMAC before changing ticket state; the code is not persisted in scan logs.
 * **Headers:** `Authorization: Bearer <sanctum_token>` (Role: `security_staff`).
 * **Request Body:**
   ```json
@@ -66,7 +66,10 @@ Receives compressed batches of 25–50 un-synced scan records from mobile scanne
         "ticket_id": 10492,
         "gate_id": 1,
         "scanned_at": 1727219045000,
-        "is_override": false
+        "is_override": false,
+        "event_configuration_version": 12,
+        "code_step": 57573968,
+        "code": "482901"
       }
     ]
   }
@@ -78,11 +81,21 @@ Receives compressed batches of 25–50 un-synced scan records from mobile scanne
     "acknowledged_scan_ids": [
       "c71a3994-e38c-4a37-9759-4b6e594d4d14"
     ],
+    "outcomes": [
+      {
+        "scan_id": "c71a3994-e38c-4a37-9759-4b6e594d4d14",
+        "decision": "accepted",
+        "reason_code": null
+      }
+    ],
     "anomalies_logged": 0
   }
   ```
 
 ---
+
+
+
 
 ## 4. Live Admin Metrics Endpoint
 
@@ -156,3 +169,26 @@ Request body:
 Every physical gate must belong to the event venue, each staff ID must be a security-staff user, and capacity is null or a positive integer. Draft assignments are replaceable, except that a gate with tickets or scan history cannot be removed. After scheduling, this endpoint is additive: previously assigned gates and staff cannot be removed because scanners may hold offline manifests and their queued scans still need authorization. Real changes increment the event configuration version and store old/new gate snapshots. A post-draft change requires a reason; capacity cannot be lowered below admissions already synchronized. Since offline scanners may have unsynced scans, capacity is not a hard real-time occupancy limit. Cancelled and completed events reject gate changes.
 
 The manifest endpoint returns 409 unless the event is scheduled or in progress and includes `event_status`. A disconnected scanner can still hold a prior manifest; cancellation or postponement cannot invalidate it until that scanner reconnects.
+
+---
+
+## 6. Student Ticket Wallet
+
+### `GET /api/v1/student/tickets`
+Returns only the authenticated student's tickets and event/gate display information. The route requires the `student` role. Active ticket TOTP secrets are included only for scheduled or in-progress events; revoked, draft, postponed, cancelled, and completed tickets do not return a usable secret. The response uses `Cache-Control: no-store`.
+
+The mobile client stores the ticket snapshot in Expo SecureStore and calculates its 30-second code locally. QR contents use `EUEVENT1:<ticket_id>:<time_step>:<six_digit_code>`; they never contain the TOTP secret.
+
+## 7. Administrator Ticket Issuance
+
+### `POST /api/v1/admin/events/{event}/tickets`
+Requires the `administrator` role. Request:
+
+```json
+{
+  "student_number": "2023-01042",
+  "event_gate_id": 4
+}
+```
+
+The student account must already exist and have the `student` role. The gate must belong to the selected event. Issuance enforces the gate's configured capacity and prevents duplicate active tickets; a revoked ticket may be reissued with a newly generated secret. The operation locks the event and gate rows, increments the event configuration version, and records a `ticket_issued` change log. The 201 response contains the ticket ID, student number, gate ID, status, and configuration version, but never the secret. Validation and capacity conflicts return 422.

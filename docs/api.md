@@ -20,6 +20,7 @@ This document records the API conventions for this project and marks which route
 | `GET /api/v1/auth/me` | Authenticated | Returns the current user identity and role. |
 | `GET /api/v1/staff/gates` | Security staff | Lists only the authenticated staff member's assigned event gates with non-secret event and ticket-count metadata. Response includes `Cache-Control: private, no-store`. |
 | `GET /api/v1/gates/{gateId}/manifest` | Assigned security staff | Returns the assigned gate's ticket manifest for scheduled or in-progress events. Response includes `Cache-Control: no-store`. |
+| `GET /api/v1/student/tickets` | Student | Returns only the authenticated student's tickets; usable ticket secrets are restricted to scheduled/in-progress events. Response includes `Cache-Control: no-store`. |
 | `POST /api/v1/sync/batch` | Security staff | Reconciles a batch of scanner records using client `scan_id` values. |
 | `GET /api/v1/admin/metrics` | Administrator | Returns ticket/admission totals, gate capacity, and recent anomalies. `event_id` is an optional filter. |
 | `GET /api/v1/admin/event-options` | Administrator | Returns venue gates and security staff choices for event setup. |
@@ -28,6 +29,7 @@ This document records the API conventions for this project and marks which route
 | `GET /api/v1/admin/events/{event}` | Administrator | Returns one event and its current configuration. |
 | `PATCH /api/v1/admin/events/{event}` | Administrator | Updates details, schedule, or lifecycle status with a versioned change log. |
 | `PUT /api/v1/admin/events/{event}/gates` | Administrator | Replaces draft assignments or adds gates/staff after scheduling while preserving existing offline scanner assignments. |
+| `POST /api/v1/admin/events/{event}/tickets` | Administrator | Issues or reissues a ticket to an existing student account for a gate assigned to the event. |
 
 For exact response fields, inspect the matching Laravel controller and API Resource. The login response currently has `token` and `user`; it does not promise the extra `token_type`, `email`, `created_at`, or `student_id` fields shown in the reference. The metrics resource currently reports `pending_sync_estimate: null` because scanner heartbeat counts are not implemented. Clients must render this as unavailable, not zero.
 
@@ -72,15 +74,30 @@ The gate must belong to the event venue; every staff ID must belong to a securit
 
 ### Manifest availability
 
-`GET /api/v1/gates/{gateId}/manifest` returns 409 unless the event is `scheduled` or `in_progress`. The manifest now includes `event_status` alongside `gate_id`, `manifest_version`, and tickets. A previously downloaded offline manifest cannot receive an immediate cancellation or postponement; operators must account for that offline limitation until the scanner reconnects.
+`GET /api/v1/gates/{gateId}/manifest` returns 409 unless the event is `scheduled` or `in_progress`. The manifest now includes `event_status` alongside `gate_id`, `manifest_version`, and tickets. The mobile scanner stores the entire manifest as authenticated AES-GCM ciphertext in SQLite; its 256-bit encryption key stays in SecureStore. A previously downloaded offline manifest cannot receive an immediate cancellation or postponement; local validation is provisional until reconciliation.
 
 ### Assigned gate discovery
 
 `GET /api/v1/staff/gates` requires a Sanctum bearer token and the `security_staff` role. It returns an `assignments` array containing only gates assigned to the authenticated staff member. Each entry has `gate_id`, `gate_code`, `gate_name`, `event_id`, `event_name`, `event_status`, `starts_at`, `ends_at`, `manifest_version`, and `ticket_count` for issued or claimed tickets. The endpoint returns metadata only: it never returns ticket IDs, student numbers, QR material, or TOTP secrets. It includes assignments for events in any lifecycle state so staff can see the latest server status; only the manifest endpoint is limited to scheduled/in-progress events. If the staff member has no assignments, `assignments` is an empty array. Responses include `Cache-Control: private, no-store`.
 
+
+### Student ticket wallet
+
+`GET /api/v1/student/tickets` requires `auth:sanctum` and role `student`. It returns only tickets owned by the authenticated student, with event and gate display fields. Active TOTP secrets are present only while the event is scheduled or in progress; all other statuses return `totp_secret: null`. The response includes `Cache-Control: no-store`. On the phone, the student app saves each ticket snapshot in SecureStore and displays `EUEVENT1:<ticket_id>:<time_step>:<six_digit_code>` QR payloads; the secret itself is never encoded in the QR.
+
+### Administrator ticket issuance
+
+`POST /api/v1/admin/events/{event}/tickets` requires the administrator role and accepts `student_number` and `event_gate_id`. The student must already exist and the gate must be assigned to the event. The service enforces gate capacity, rejects duplicate active tickets, and permits reissue of a revoked ticket with a new secret. It increments the event configuration version and records a change log. Its 201 response contains ticket identity/status and the new configuration version, but no TOTP secret.
+
+### Scanner sync proof and outcomes
+
+Each `POST /api/v1/sync/batch` record contains `scan_id`, `ticket_id`, `gate_id`, `scanned_at`, `is_override`, optional `event_configuration_version`, `code_step`, and `code`. Laravel recomputes the six-digit HMAC-SHA1 code against the encrypted ticket secret and checks that the QR step is within one 30-second window of the device scan time. The one-time code is never written to scan logs. Responses contain `acknowledged_scan_ids` and one `outcomes` entry per scan with `decision` (`accepted` or `rejected`) and `reason_code`; identical retries return their original decision.
+
+The client encrypts queued records in SQLite, sends at most 50 per request, and erases each local code proof after the server acknowledges it. A valid offline scan remains provisional until this response arrives. Reconciliation rejects scans for cancelled/postponed events and can accept scans uploaded after an event is completed only when the device-reported scan time falls within the event schedule.
+
 ## Routes still to design
 
-The current backend does **not** yet expose the full product API. Student ticket wallet retrieval, complete filterable audit-log browsing, and scanner heartbeat/pending-sync telemetry remain planned. Do not present those capabilities as implemented. Do not copy the reference's `registrations`, `access_points`, `/me/tickets`, or `/staff/events/.../admissions` names without a deliberate schema and ADR review.
+The current backend does **not** yet expose the full product API. Complete filterable audit-log browsing and scanner heartbeat/pending-sync telemetry remain planned. Do not present those capabilities as implemented. Do not copy the reference's `registrations`, `access_points`, `/me/tickets`, or `/staff/events/.../admissions` names without a deliberate schema and ADR review.
 
 ## Rules for new endpoints
 

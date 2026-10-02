@@ -32,4 +32,4 @@ Do not import Ingress-specific routes, table names, token formats, framework/dat
 
 The detailed project rules are consolidated in [`docs/architecture.md`](../../docs/architecture.md), [`docs/api.md`](../../docs/api.md), and [`docs/design-decisions.md`](../../docs/design-decisions.md). The attachments are reference material, not a second source of truth. A future change to an accepted invariant requires a new ADR and a migration plan for backend, web, and mobile clients.
 
-This ADR does not decide the unresolved local TOTP seed persistence design. The existing SecureStore rule and SQLite manifest sketch must be reconciled before implementing that storage path.
+The local offline credential and scan storage decision is recorded in [ADR 010](010-encrypted-offline-ticket-and-scan-storage.md).

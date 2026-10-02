@@ -11,7 +11,7 @@ This guide records choices that are accepted for this project and explains how n
 | Time authority | Scanner clock validates the student's rotating token. | [ADR 003](../architecture/decisions/003-scanner-hardware-clock-as-trust-anchor.md) |
 | Offline sync | UUID v4 `scan_id`, persisted before sending and reused on retries. | [ADR 004](../architecture/decisions/004-uuid-v4-idempotent-sync-keys.md) |
 | Admin refresh | HTTP polling; no WebSocket dependency for dashboard metrics. | [ADR 006](../architecture/decisions/006-http-polling-over-websockets.md) |
-| Local scanner data | Expo SQLite is used for structured offline queue data, subject to the secret-storage issue in the architecture guide. | [ADR 007](../architecture/decisions/007-expo-sqlite-over-native-cpp-bridges.md) |
+| Local scanner data | Manifest and pending scan payloads are AES-256-GCM ciphertext in SQLite; AES keys and student ticket snapshots stay in SecureStore. | [ADR 010](../architecture/decisions/010-encrypted-offline-ticket-and-scan-storage.md) |
 | Operational exception | Marshal override is a staff capability with an auditable result, not a fourth user role. | [ADR 008](../architecture/decisions/008-marshal-pin-override-contingency.md) |
 
 A decision is **accepted** only when recorded in a project ADR or an existing project rule. A reference, screenshot, generated code example, or downloaded document alone does not change the system.
