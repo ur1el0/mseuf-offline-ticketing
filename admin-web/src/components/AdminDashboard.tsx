@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import {
   Activity, AlertCircle, CalendarDays, CheckCheck, ChevronDown,
-  ClipboardList, DoorOpen, LogOut, RefreshCw, ShieldCheck, TicketCheck,
+  ClipboardList, DoorOpen, GraduationCap, LogOut, RefreshCw, ShieldCheck, TicketCheck,
 } from 'lucide-react';
 import { useAdminMetrics } from '../hooks/useAdminMetrics';
 import type { AuthSession } from '../types';
@@ -10,6 +10,8 @@ import { MetricCard } from './MetricCard';
 import { OperationalPanels } from './OperationalPanels';
 import { SecurityStaffManagement } from './SecurityStaffManagement';
 import { AdminEventManagement } from './AdminEventManagement';
+import { StudentManagement } from './StudentManagement';
+import { ActivityLogManagement } from './ActivityLogManagement';
 
 const number = new Intl.NumberFormat();
 
@@ -25,7 +27,7 @@ function formatTime(value: Date | null): string {
 
 export function AdminDashboard({ session, onSignOut, isSigningOut }: AdminDashboardProps) {
   const { data, error, isLoading, updatedAt, refresh } = useAdminMetrics(session.token);
-  const [activeView, setActiveView] = useState<'dashboard' | 'staff' | 'events'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'staff' | 'events' | 'students' | 'audit'>('dashboard');
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const admittedPercent = data && data.total_issued > 0
     ? Math.round((data.total_admitted / data.total_issued) * 100)
@@ -57,12 +59,17 @@ export function AdminDashboard({ session, onSignOut, isSigningOut }: AdminDashbo
             onClick={() => setActiveView('staff')} aria-current={activeView === 'staff' ? 'page' : undefined}>
             <ShieldCheck size={19} /><span>Security staff</span>
           </button>
+          <button className={activeView === 'students' ? 'nav-item nav-item--active' : 'nav-item'} type="button"
+            onClick={() => setActiveView('students')} aria-current={activeView === 'students' ? 'page' : undefined}>
+            <GraduationCap size={19} /><span>Students</span>
+          </button>
           <button className={activeView === 'events' ? 'nav-item nav-item--active' : 'nav-item'} type="button"
             onClick={() => setActiveView('events')} aria-current={activeView === 'events' ? 'page' : undefined}>
             <CalendarDays size={19} /><span>Events &amp; gates</span>
           </button>
-          <button className="nav-item nav-item--disabled" type="button" disabled title="Full audit-log browsing is the next management module">
-            <ClipboardList size={19} /><span>Audit log</span><small>Next</small>
+          <button className={activeView === 'audit' ? 'nav-item nav-item--active' : 'nav-item'} type="button"
+            onClick={() => setActiveView('audit')} aria-current={activeView === 'audit' ? 'page' : undefined}>
+            <ClipboardList size={19} /><span>Audit log</span>
           </button>
         </nav>
         <div className="sidebar-bottom">
@@ -77,7 +84,7 @@ export function AdminDashboard({ session, onSignOut, isSigningOut }: AdminDashbo
       </aside>
 
       <main className="dashboard-main" id="dashboard">
-        {activeView === 'staff' ? <SecurityStaffManagement token={session.token} /> : activeView === 'events' ? <AdminEventManagement token={session.token} /> : <>
+        {activeView === 'staff' ? <SecurityStaffManagement token={session.token} /> : activeView === 'events' ? <AdminEventManagement token={session.token} /> : activeView === 'students' ? <StudentManagement token={session.token} /> : activeView === 'audit' ? <ActivityLogManagement token={session.token} /> : <>
         <header className="dashboard-header">
           <div>
             <p className="eyebrow">MSEUF · VENUE OPERATIONS</p>
@@ -153,7 +160,7 @@ export function AdminDashboard({ session, onSignOut, isSigningOut }: AdminDashbo
         )}
 
         <footer className="dashboard-footer">
-          <span><DoorOpen size={15} /> Event and gate management is still being connected to the API.</span>
+          <span><DoorOpen size={15} /> Review account, event, and gate activity in the Audit log.</span>
           <span>Refreshes every 10 seconds · Last update {formatTime(updatedAt)}</span>
         </footer>
         </>}
