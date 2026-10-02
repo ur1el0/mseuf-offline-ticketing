@@ -1,28 +1,42 @@
 import { apiRequest, ApiError } from './apiClient';
 
+export type UserRole = 'student' | 'security_staff' | 'administrator';
+
 type User = {
   id: number;
   name: string;
   student_number: string | null;
-  role: string;
+  role: UserRole;
 };
 
 type LoginPayload = { token: string; user: User };
 type UserPayload = { user: User };
 
-export async function signInWithPassword(email: string, password: string) {
+export async function signInWithPassword(
+  identifier: string,
+  password: string,
+  expectedRole: 'student' | 'security_staff',
+) {
   const payload = await apiRequest<LoginPayload>('/auth/login', {
     method: 'POST',
-    body: { identifier: email.trim(), password, device_name: 'euevent-security-scanner' },
+    body: { identifier: identifier.trim(), password, device_name: 'euevent-mobile-client' },
   });
 
-  if (payload.user.role !== 'security_staff') {
+  if ((payload.user.role !== 'security_staff' && payload.user.role !== 'student')
+    || payload.user.role !== expectedRole) {
     try {
       await apiRequest('/auth/logout', { method: 'POST', token: payload.token });
     } catch {
       // Keep the rejection message useful even if token cleanup cannot reach the API.
     }
-    throw new Error('This account is not assigned the Security Staff role.');
+
+    if (payload.user.role === 'administrator') {
+      throw new Error('Administrators sign in through the desktop dashboard.');
+    }
+
+    throw new Error(payload.user.role === 'student'
+      ? 'This is a student account. Choose Student access and sign in with your student number.'
+      : 'This is a staff account. Choose Security Staff access and sign in with your staff email.');
   }
 
   return payload;

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { ApiError, DEFAULT_API_BASE_URL, normalizeApiBaseUrl } from '../services/apiClient';
 import { fetchCurrentUser, signInWithPassword, signOutFromApi, type User } from '../services/auth';
 import { clearOfflineGateManifests } from '../services/offlineManifestStore';
+import { clearStudentTicketCache } from '../services/studentTicketStorage';
 import { sessionStorage } from '../services/sessionStorage';
 
 type SecuritySession = {
@@ -9,12 +10,16 @@ type SecuritySession = {
   token: string | null;
   serverUrl: string;
   isRestoring: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (identifier: string, password: string, expectedRole: 'student' | 'security_staff') => Promise<void>;
   signOut: () => Promise<void>;
   updateServerUrl: (url: string) => Promise<boolean>;
 };
 
 const SecuritySessionContext = createContext<SecuritySession | null>(null);
+
+function isMobileRole(role: string): boolean {
+  return role === 'security_staff' || role === 'student';
+}
 
 export function SecuritySessionProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -31,25 +36,34 @@ export function SecuritySessionProvider({ children }: { children: React.ReactNod
           sessionStorage.readToken(),
           sessionStorage.readUser(),
         ]);
-        if (active && savedUrl) setServerUrl(normalizeApiBaseUrl(savedUrl));
+        const restoredServerUrl = savedUrl ? normalizeApiBaseUrl(savedUrl) : DEFAULT_API_BASE_URL;
+        if (active) {
+          setServerUrl(restoredServerUrl);
+        }
+
         if (savedToken) {
           try {
             const payload = await fetchCurrentUser(savedToken);
-            if (active && payload.user.role === 'security_staff') {
+            if (active && isMobileRole(payload.user.role)) {
               await sessionStorage.saveUser(payload.user);
               setToken(savedToken);
               setUser(payload.user);
             } else if (active) {
               await Promise.all([sessionStorage.clearToken(), sessionStorage.clearUser()]);
               await clearOfflineGateManifests().catch(() => undefined);
+              if (savedUser?.role === 'student') {
+                await clearStudentTicketCache(restoredServerUrl, savedUser.id).catch(() => undefined);
+              }
             }
           } catch (error) {
             if (active && error instanceof ApiError && error.status === 401) {
               await Promise.all([sessionStorage.clearToken(), sessionStorage.clearUser()]);
               await clearOfflineGateManifests().catch(() => undefined);
-            } else if (active
-              && (!(error instanceof ApiError) || error.status >= 500)
-              && savedUser?.role === 'security_staff') {
+              if (savedUser?.role === 'student') {
+                await clearStudentTicketCache(restoredServerUrl, savedUser.id).catch(() => undefined);
+              }
+            } else if (active && (!(error instanceof ApiError) || error.status >= 500)
+              && savedUser && isMobileRole(savedUser.role)) {
               setToken(savedToken);
               setUser(savedUser);
             }
@@ -64,8 +78,8 @@ export function SecuritySessionProvider({ children }: { children: React.ReactNod
     return () => { active = false; };
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const payload = await signInWithPassword(email, password);
+  const signIn = useCallback(async (identifier: string, password: string, expectedRole: 'student' | 'security_staff') => {
+    const payload = await signInWithPassword(identifier, password, expectedRole);
     await Promise.all([
       sessionStorage.saveToken(payload.token),
       sessionStorage.saveUser(payload.user),
@@ -76,6 +90,7 @@ export function SecuritySessionProvider({ children }: { children: React.ReactNod
 
   const signOut = useCallback(async () => {
     const currentToken = token;
+    const currentUser = user;
     setUser(null);
     setToken(null);
     try {
@@ -85,8 +100,11 @@ export function SecuritySessionProvider({ children }: { children: React.ReactNod
     } finally {
       await Promise.all([sessionStorage.clearToken(), sessionStorage.clearUser()]);
       await clearOfflineGateManifests().catch(() => undefined);
+      if (currentUser?.role === 'student') {
+        await clearStudentTicketCache(serverUrl, currentUser.id).catch(() => undefined);
+      }
     }
-  }, [token]);
+  }, [serverUrl, token, user]);
 
   const updateServerUrl = useCallback(async (value: string) => {
     const nextUrl = normalizeApiBaseUrl(value);
@@ -96,11 +114,14 @@ export function SecuritySessionProvider({ children }: { children: React.ReactNod
     await sessionStorage.saveApiBaseUrl(nextUrl);
     await Promise.all([sessionStorage.clearToken(), sessionStorage.clearUser()]);
     await clearOfflineGateManifests().catch(() => undefined);
+    if (user?.role === 'student') {
+      await clearStudentTicketCache(serverUrl, user.id).catch(() => undefined);
+    }
     setServerUrl(nextUrl);
     setToken(null);
     setUser(null);
     return true;
-  }, [serverUrl]);
+  }, [serverUrl, user]);
 
   return (
     <SecuritySessionContext.Provider value={{ user, token, serverUrl, isRestoring, signIn, signOut, updateServerUrl }}>

@@ -9,6 +9,7 @@ import {
 import { ActivityIndicator, View } from 'react-native';
 import { SignInScreen } from '../screens/SignInScreen';
 import { ScannerHomeScreen } from '../screens/ScannerHomeScreen';
+import { StudentTicketsScreen } from '../screens/StudentTicketsScreen';
 import { useSecuritySession } from '../hooks/useSecuritySession';
 import { colors } from '../theme';
 
@@ -29,6 +30,10 @@ export default function IndexRoute() {
         <ActivityIndicator color={colors.gold} />
       </View>
     );
+  }
+
+  if (session.user?.role === 'student') {
+    return <StudentTicketsScreen />;
   }
 
   return session.user ? <ScannerHomeScreen /> : <SignInScreen />;
