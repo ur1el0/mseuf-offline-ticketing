@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   RefreshControl,
@@ -10,53 +11,102 @@ import {
   Text,
   View,
 } from 'react-native';
-import { CloudOff, LogOut, MapPin, RefreshCw, Settings2, ShieldCheck, TicketCheck, Wifi } from 'lucide-react-native';
+import { CheckCircle2, CloudDownload, CloudOff, LogOut, MapPin, RefreshCw, Settings2, ShieldCheck, TicketCheck, Wifi } from 'lucide-react-native';
 import { useSecuritySession } from '../hooks/useSecuritySession';
 import { fetchAssignedGates, type AssignedGate } from '../services/assignedGates';
 import { ApiError } from '../services/apiClient';
+import { fetchGateManifest } from '../services/gateManifest';
+import {
+  clearOfflineGateManifests,
+  loadOfflineGateManifests,
+  saveOfflineGateManifest,
+  summarizeOfflineGateManifest,
+  type CachedManifestSummary,
+} from '../services/offlineManifestStore';
 import { colors, fonts } from '../theme';
 
 export function ScannerHomeScreen() {
   const session = useSecuritySession();
+  const { token, serverUrl, signOut: endSession } = session;
   const [assignments, setAssignments] = useState<AssignedGate[]>([]);
+  const [cachedManifests, setCachedManifests] = useState<Record<number, CachedManifestSummary>>({});
   const [message, setMessage] = useState('');
+  const [isOffline, setIsOffline] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [downloadingGateId, setDownloadingGateId] = useState<number | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
 
-  const loadAssignments = useCallback(async () => {
-    if (!session.token) return;
-    setIsRefreshing(true);
+  const staffId = session.user?.id;
+  const loadAssignments = useCallback(async (showRefresh = false) => {
+    if (!token || !staffId) return;
+    setIsRefreshing(showRefresh);
     setMessage('');
+    let savedManifests: Awaited<ReturnType<typeof loadOfflineGateManifests>> = [];
+
     try {
-      setAssignments(await fetchAssignedGates(session.token));
+      savedManifests = await loadOfflineGateManifests(serverUrl, staffId);
+      setCachedManifests(Object.fromEntries(savedManifests.map((snapshot) => [
+        snapshot.assignment.gate_id,
+        summarizeOfflineGateManifest(snapshot),
+      ])));
+    } catch {
+      setCachedManifests({});
+    }
+
+    try {
+      setAssignments(await fetchAssignedGates(token));
+      setIsOffline(false);
     } catch (cause) {
-      if (cause instanceof ApiError && cause.status === 401) {
-        setMessage('Your session expired. Sign in again to refresh your assignments.');
+      if (cause instanceof ApiError && (cause.status === 401 || cause.status === 403)) {
+        setMessage('This staff account is no longer authorized. Sign in again to load current assignments.');
+        await endSession();
+      } else if ((!(cause instanceof ApiError) || cause.status >= 500) && savedManifests.length > 0) {
+        setAssignments(savedManifests.map((snapshot) => snapshot.assignment));
+        setIsOffline(true);
+        setMessage('Event server unavailable. Showing this device’s last downloaded gate manifests.');
       } else {
+        setIsOffline(false);
         setMessage(cause instanceof Error ? cause.message : 'Could not load gate assignments.');
       }
     } finally {
+      setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [session.token]);
+  }, [endSession, serverUrl, staffId, token]);
 
   useEffect(() => {
-    if (!session.token) return;
-    let active = true;
-    void fetchAssignedGates(session.token)
-      .then((items) => { if (active) setAssignments(items); })
-      .catch((cause: unknown) => {
-        if (!active) return;
-        if (cause instanceof ApiError && cause.status === 401) {
-          setMessage('Your session expired. Sign in again to refresh your assignments.');
-        } else {
-          setMessage(cause instanceof Error ? cause.message : 'Could not load gate assignments.');
-        }
-      })
-      .finally(() => { if (active) setIsLoading(false); });
-    return () => { active = false; };
-  }, [session.token]);
+    void Promise.resolve().then(() => loadAssignments());
+  }, [loadAssignments]);
+
+  async function downloadManifest(assignment: AssignedGate) {
+    if (!session.token || !staffId || isOffline) return;
+    setDownloadingGateId(assignment.gate_id);
+    try {
+      const manifest = await fetchGateManifest(session.token, assignment.gate_id);
+      const snapshot = await saveOfflineGateManifest(
+        session.serverUrl,
+        staffId,
+        assignment,
+        manifest,
+      );
+      setCachedManifests((current) => ({
+        ...current,
+        [assignment.gate_id]: summarizeOfflineGateManifest(snapshot),
+      }));
+    } catch (cause) {
+      if (cause instanceof ApiError && (cause.status === 401 || cause.status === 403)) {
+        await session.signOut();
+      } else {
+        Alert.alert(
+          'Manifest not saved',
+          cause instanceof Error ? cause.message : 'Could not download this gate manifest.',
+        );
+      }
+    } finally {
+      setDownloadingGateId(null);
+    }
+  }
 
   async function signOut() {
     setIsSigningOut(true);
@@ -68,7 +118,7 @@ export function ScannerHomeScreen() {
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadAssignments()} tintColor={colors.gold} colors={[colors.gold]} />}
+      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadAssignments(true)} tintColor={colors.gold} colors={[colors.gold]} />}
     >
       <View style={styles.header}>
         <View style={styles.brand}>
@@ -94,20 +144,20 @@ export function ScannerHomeScreen() {
         <Text style={styles.subtitle}>Here are your assigned event gates.</Text>
       </View>
 
-      <View style={[styles.statusPill, Boolean(message) && styles.statusPillOffline]}>
-        <View style={[styles.statusDot, Boolean(message) && styles.statusDotOffline]} />
-        <Text style={[styles.statusPillText, Boolean(message) && styles.statusPillTextOffline]}>
-          {isLoading ? 'Connecting to event server' : message ? 'Server unavailable' : 'Connected to event server'}
+      <View style={[styles.statusPill, (Boolean(message) || isOffline) && styles.statusPillOffline]}>
+        <View style={[styles.statusDot, (Boolean(message) || isOffline) && styles.statusDotOffline]} />
+        <Text style={[styles.statusPillText, (Boolean(message) || isOffline) && styles.statusPillTextOffline]}>
+          {isLoading ? 'Connecting to event server' : isOffline ? 'Offline · local manifests available' : message ? 'Server unavailable' : 'Connected to event server'}
         </Text>
-        <Wifi size={14} color={message ? colors.red : colors.green} />
+        <Wifi size={14} color={(message || isOffline) ? colors.red : colors.green} />
       </View>
 
       <View style={styles.sectionHeader}>
         <View>
           <Text style={styles.sectionTitle}>Your assignments</Text>
-          <Text style={styles.sectionHint}>Only gates assigned to your staff account are shown.</Text>
+          <Text style={styles.sectionHint}>Current assignments or the last saved offline copies.</Text>
         </View>
-        <Pressable onPress={() => void loadAssignments()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh assignments" style={styles.refreshButton}>
+        <Pressable onPress={() => void loadAssignments(true)} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh assignments" style={styles.refreshButton}>
           {isRefreshing ? <ActivityIndicator color={colors.gold} /> : <RefreshCw size={16} color={colors.gold} />}
         </Pressable>
       </View>
@@ -123,28 +173,77 @@ export function ScannerHomeScreen() {
           <Text style={styles.emptyText}>Ask an administrator to assign you to an event gate, then refresh this screen.</Text>
         </View>
       ) : null}
-      {assignments.map((assignment) => <AssignmentCard key={assignment.gate_id} assignment={assignment} />)}
+      {assignments.map((assignment) => (
+        <AssignmentCard
+          key={assignment.gate_id}
+          assignment={assignment}
+          cachedManifest={cachedManifests[assignment.gate_id]}
+          isDownloading={downloadingGateId === assignment.gate_id}
+          isOffline={isOffline}
+          onDownload={() => void downloadManifest(assignment)}
+        />
+      ))}
 
       <View style={styles.checklistCard}>
         <Text style={styles.checklistHeading}>Before doors open</Text>
         <ChecklistRow icon={<ShieldCheck size={17} color={colors.green} />} title="Signed in as security staff" detail={session.user?.name ?? ''} done />
         <ChecklistRow icon={<TicketCheck size={17} color={assignments.length ? colors.green : colors.muted} />} title="Gate assignments loaded" detail={`${assignments.length} assigned ${assignments.length === 1 ? 'gate' : 'gates'}`} done={assignments.length > 0} />
-        <ChecklistRow icon={<CloudOff size={17} color={colors.gold} />} title="Offline ticket scanning" detail="Not available in this build yet" done={false} last />
+        <ChecklistRow
+          icon={<CloudOff size={17} color={Object.keys(cachedManifests).length ? colors.green : colors.gold} />}
+          title="Encrypted offline manifests"
+          detail={`${Object.keys(cachedManifests).length} ${Object.keys(cachedManifests).length === 1 ? 'gate' : 'gates'} prepared on this device`}
+          done={Object.keys(cachedManifests).length > 0}
+          last
+        />
       </View>
 
       <View style={styles.offlineNotice}>
         <View style={styles.noticeIcon}><CloudOff size={17} color={colors.gold} /></View>
         <View style={styles.noticeCopy}>
-          <Text style={styles.noticeTitle}>Offline scanner is still in progress</Text>
-          <Text style={styles.noticeBody}>This app can sign in and load assigned-gate metadata. It does not cache ticket secrets or validate tickets offline yet.</Text>
+          <Text style={styles.noticeTitle}>Prepare each gate before doors open</Text>
+          <Text style={styles.noticeBody}>Downloaded manifests are encrypted on this device. This build still needs QR validation and scan syncing before it can approve entry offline.</Text>
         </View>
       </View>
+      <Pressable
+        onPress={() => Alert.alert(
+          'Clear offline manifests?',
+          'This removes the encrypted ticket data saved on this phone. Download the manifests again before the event.',
+          [
+            { text: 'Keep manifests', style: 'cancel' },
+            {
+              text: 'Clear',
+              style: 'destructive',
+              onPress: () => {
+                void clearOfflineGateManifests()
+                  .then(() => setCachedManifests({}))
+                  .catch(() => Alert.alert('Could not clear manifests', 'Please try again.'));
+              },
+            },
+          ],
+        )}
+        accessibilityRole="button"
+        style={styles.clearCacheButton}
+      >
+        <Text style={styles.clearCacheText}>Clear saved offline manifests</Text>
+      </Pressable>
       <Text style={styles.footer}>EUEvent · Secure entry operations</Text>
     </ScrollView>
   );
 }
 
-function AssignmentCard({ assignment }: { assignment: AssignedGate }) {
+function AssignmentCard({
+  assignment,
+  cachedManifest,
+  isDownloading,
+  isOffline,
+  onDownload,
+}: {
+  assignment: AssignedGate;
+  cachedManifest?: CachedManifestSummary;
+  isDownloading: boolean;
+  isOffline: boolean;
+  onDownload: () => void;
+}) {
   const statusLabel = assignment.event_status.replace('_', ' ');
   const eventDate = new Date(assignment.starts_at);
   const schedule = Number.isNaN(eventDate.getTime())
@@ -177,8 +276,41 @@ function AssignmentCard({ assignment }: { assignment: AssignedGate }) {
           <Text style={styles.statValue}>v{assignment.manifest_version}</Text>
         </View>
       </View>
+      <View style={styles.manifestRow}>
+        <View style={styles.manifestCopy}>
+          {cachedManifest ? (
+            <>
+              <Text style={styles.manifestReady}><CheckCircle2 size={13} color={colors.green} />  Encrypted copy · {cachedManifest.ticketCount} tickets</Text>
+              <Text style={styles.manifestMeta}>Version {cachedManifest.manifestVersion} · downloaded {formatDownloadedAt(cachedManifest.downloadedAt)}</Text>
+            </>
+          ) : (
+            <Text style={styles.manifestMeta}>No offline manifest saved for this gate yet.</Text>
+          )}
+        </View>
+        <Pressable
+          onPress={onDownload}
+          disabled={isDownloading || isOffline || !isActive}
+          accessibilityRole="button"
+          style={[styles.downloadButton, (isDownloading || isOffline || !isActive) && styles.downloadButtonDisabled]}
+        >
+          {isDownloading
+            ? <ActivityIndicator color={colors.background} size="small" />
+            : <CloudDownload size={15} color={colors.background} />}
+          <Text style={styles.downloadButtonText}>
+            {isDownloading ? 'Saving' : cachedManifest ? 'Update' : 'Prepare'}
+          </Text>
+        </Pressable>
+      </View>
+      {!isActive ? <Text style={styles.manifestUnavailable}>Manifests are available when the event is scheduled or in progress.</Text> : null}
     </View>
   );
+}
+
+function formatDownloadedAt(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? 'recently'
+    : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date);
 }
 
 function ChecklistRow({ icon, title, detail, done, last = false }: { icon: React.ReactNode; title: string; detail: string; done: boolean; last?: boolean }) {
@@ -247,6 +379,14 @@ const styles = StyleSheet.create({
   stat: { gap: 3 },
   statLabel: { color: colors.muted, fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 1 },
   statValue: { color: colors.text, fontFamily: fonts.bodyStrong, fontSize: 12 },
+  manifestRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderTopWidth: 1, borderTopColor: colors.border, marginTop: 14, paddingTop: 12 },
+  manifestCopy: { flex: 1, gap: 4 },
+  manifestReady: { color: colors.green, fontFamily: fonts.bodyBold, fontSize: 10 },
+  manifestMeta: { color: colors.muted, fontFamily: fonts.bodyRegular, fontSize: 9, lineHeight: 14 },
+  downloadButton: { minHeight: 39, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 14, backgroundColor: colors.gold },
+  downloadButtonDisabled: { opacity: 0.45 },
+  downloadButtonText: { color: colors.background, fontFamily: fonts.bodyBold, fontSize: 10 },
+  manifestUnavailable: { color: colors.muted, fontFamily: fonts.bodyRegular, fontSize: 9, marginTop: 8 },
   checklistCard: { padding: 16, borderRadius: 23, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginTop: 3, marginBottom: 14 },
   checklistHeading: { color: colors.text, fontFamily: fonts.heading, fontSize: 20, marginBottom: 8 },
   checklistRow: { flexDirection: 'row', alignItems: 'center', minHeight: 61, gap: 10 },
@@ -266,5 +406,7 @@ const styles = StyleSheet.create({
   noticeCopy: { flex: 1, gap: 4 },
   noticeTitle: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 12 },
   noticeBody: { color: '#E6D5AA', fontFamily: fonts.bodyRegular, fontSize: 10, lineHeight: 15 },
+  clearCacheButton: { alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 9, marginTop: 4 },
+  clearCacheText: { color: colors.muted, fontFamily: fonts.bodyStrong, fontSize: 10 },
   footer: { color: colors.muted, fontFamily: fonts.bodyRegular, textAlign: 'center', fontSize: 10, marginTop: 22 },
 });
