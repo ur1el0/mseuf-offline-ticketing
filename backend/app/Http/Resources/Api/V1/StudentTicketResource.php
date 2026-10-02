@@ -35,7 +35,6 @@ class StudentTicketResource extends JsonResource
             'event' => [
                 'id' => $event->getKey(),
                 'name' => $event->name,
-                'description' => $event->description,
                 'starts_at' => $event->starts_at?->toIso8601String(),
                 'ends_at' => $event->ends_at?->toIso8601String(),
                 'status' => $event->status,

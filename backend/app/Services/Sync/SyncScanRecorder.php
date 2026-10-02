@@ -18,7 +18,9 @@ class SyncScanRecorder
      *     gate_id: int|string,
      *     scanned_at: int|string,
      *     is_override: bool|int|string,
-     *     event_configuration_version?: int|string|null
+     *     event_configuration_version?: int|string|null,
+     *     code_step: int|string,
+     *     code: string
      * } $scan
      */
     public function recordDecision(
