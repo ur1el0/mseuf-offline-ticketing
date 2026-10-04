@@ -7,6 +7,7 @@ scratch/
 
 # Environment & Sensitive Credentials
 .env
+.env.local
 .env.backup
 .env.production
 *.key
@@ -65,3 +66,8 @@ Thumbs.db
 .phpunit.result.cache
 coverage/
 .nyc_output/
+
+# Local AI tooling and plugin-generated state
+/.agents/skills/impeccable/
+.impeccable/
+.claude/

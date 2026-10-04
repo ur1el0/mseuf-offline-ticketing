@@ -56,3 +56,63 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+
+## Local presentation mode
+
+Use this mode when the venue internet is unreliable. Fedora runs Laravel and a dedicated PostgreSQL database locally; the admin browser and phones connect over the same Wi-Fi. This database is separate from Supabase and contains only local demo data.
+
+### One-time setup
+
+From the repository root:
+
+```bash
+cd backend
+./scripts/setup-presentation-demo.sh
+```
+
+The script starts Lerd PostgreSQL if needed, creates a dedicated `euevent_demo` database and login, generates unique local credentials, runs Laravel migrations, and seeds one administrator, a venue, and Gate A. It writes secrets to the ignored, owner-readable-only `.env.demo` file. It does not change `.env` or contact Supabase.
+
+The generated administrator is `demo-admin@euevent.test`. To read the generated password on Fedora:
+
+```bash
+grep '^EUEVENT_DEMO_ADMIN_PASSWORD=' .env.demo
+```
+
+Keep that password on the presentation computer. The demo seeder is explicitly restricted to Laravel's `demo` environment.
+
+### Start the API and clients
+
+1. Start the local Laravel API and database from `backend`:
+
+   ```bash
+   ./scripts/start-presentation-demo.sh
+   ```
+
+   Laravel listens on port `8002` on Fedora's LAN interfaces. Keep this terminal open.
+
+2. In another terminal, run the administrator dashboard:
+
+   ```bash
+   cd admin-web
+   npm run dev -- --host 0.0.0.0
+   ```
+
+   Its ignored `.env.local` points the Vite API proxy at the local Laravel API. Open the Vite URL printed in the terminal on Fedora.
+
+3. Start Expo Go on the same Wi-Fi:
+
+   ```bash
+   cd security-scanner
+   npm run start:lan
+   ```
+
+   The launcher detects Fedora's current LAN address and passes it to Expo as the API default. If a phone has an older server address saved in secure storage, open the app's server settings and save the address printed by the launcher. Keep the Metro/Expo terminal open while presenting with Expo Go.
+
+The Fedora LAN address can change when the Wi-Fi router renews its DHCP lease. The launcher detects the current address each time; a DHCP reservation on the presentation router can make it stable if you control that router.
+
+### What works without internet
+
+Once the devices are on the same local Wi-Fi, the API, database, dashboard, and Expo Go bundle can communicate locally without WAN access. A working local Wi-Fi network is still required for phones to reach Fedora. If the venue Wi-Fi has poor WAN bandwidth but a healthy local network, the application traffic stays inside that network. If the local network also fails, security staff need the event manifest already downloaded on their scanner; queued scans can sync after connectivity returns.
+
+Expo Go still loads the JavaScript bundle from the running Metro server. For a presentation that must survive losing the local Wi-Fi too, install a standalone app build and preload the scanner manifest before the network goes down.

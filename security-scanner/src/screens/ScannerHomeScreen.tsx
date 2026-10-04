@@ -11,6 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Camera, CheckCircle2, CloudDownload, CloudOff, CloudUpload, LogOut, MapPin, RefreshCw, Settings2, ShieldCheck, TicketCheck, Wifi } from 'lucide-react-native';
 import { useSecuritySession } from '../hooks/useSecuritySession';
 import { fetchAssignedGates, type AssignedGate } from '../services/assignedGates';
@@ -93,6 +94,10 @@ export function ScannerHomeScreen() {
         snapshot.assignment.gate_id,
         summarizeOfflineGateManifest(snapshot),
       ])));
+      if (savedManifests.length > 0) {
+        setAssignments(savedManifests.map((snapshot) => snapshot.assignment));
+        setIsLoading(false);
+      }
     } catch {
       setCachedManifests({});
       setOfflineManifests({});
@@ -114,9 +119,9 @@ export function ScannerHomeScreen() {
         setMessage(cause instanceof Error ? cause.message : 'Could not load gate assignments.');
       }
     } finally {
-      await refreshQueue(true);
       setIsLoading(false);
       setIsRefreshing(false);
+      void refreshQueue(true);
     }
   }, [endSession, refreshQueue, serverUrl, staffId, token]);
 
@@ -183,7 +188,8 @@ export function ScannerHomeScreen() {
 
   return (
     <>
-    <ScrollView
+      <SafeAreaView style={styles.screen}>
+        <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadAssignments(true)} tintColor={colors.gold} colors={[colors.gold]} />}
@@ -312,7 +318,8 @@ export function ScannerHomeScreen() {
         <Text style={styles.clearCacheText}>Clear saved offline manifests</Text>
       </Pressable>
       <Text style={styles.footer}>EUEvent · Secure entry operations</Text>
-    </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     {selectedAssignment && selectedManifest ? (
       <GateScanModal
         visible

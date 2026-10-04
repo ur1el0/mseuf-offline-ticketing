@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { ApiError } from '../services/apiClient';
 import { fetchStudentTickets, type StudentTicket } from '../services/studentTickets';
@@ -81,7 +82,8 @@ export function StudentTicketsScreen() {
   const firstName = user?.name.trim().split(/\s+/)[0] || 'there';
 
   return (
-    <ScrollView
+    <SafeAreaView style={styles.screen}>
+      <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadTickets(true)} tintColor={colors.gold} colors={[colors.gold]} />}
@@ -158,7 +160,8 @@ export function StudentTicketsScreen() {
         </View>
       </View>
       <Text style={styles.footer}>EUEvent · Student entry pass</Text>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 

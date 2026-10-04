@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, CircleCheck, Server, Wifi } from 'lucide-react-native';
 import { useSecuritySession } from '../hooks/useSecuritySession';
 import { testApiConnection } from '../services/apiClient';
@@ -48,7 +49,8 @@ export default function ServerSettingsScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <SafeAreaView style={styles.screen}>
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Pressable onPress={() => router.back()} style={styles.backButton} accessibilityRole="button">
         <ArrowLeft size={18} color={colors.text} />
         <Text style={styles.backText}>Back</Text>
@@ -87,7 +89,8 @@ export default function ServerSettingsScreen() {
         </Pressable>
       </View>
       <Text style={styles.securityNote}>Changing the server signs you out. Each server issues its own session token.</Text>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 

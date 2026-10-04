@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { ApiError, DEFAULT_API_BASE_URL, normalizeApiBaseUrl } from '../services/apiClient';
 import { fetchCurrentUser, signInWithPassword, signOutFromApi, type User } from '../services/auth';
 import { clearOfflineGateManifests } from '../services/offlineManifestStore';
@@ -26,6 +26,7 @@ export function SecuritySessionProvider({ children }: { children: React.ReactNod
   const [token, setToken] = useState<string | null>(null);
   const [serverUrl, setServerUrl] = useState(DEFAULT_API_BASE_URL);
   const [isRestoring, setIsRestoring] = useState(true);
+  const sessionTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -37,18 +38,34 @@ export function SecuritySessionProvider({ children }: { children: React.ReactNod
           sessionStorage.readUser(),
         ]);
         const restoredServerUrl = savedUrl ? normalizeApiBaseUrl(savedUrl) : DEFAULT_API_BASE_URL;
+
         if (active) {
+          sessionTokenRef.current = savedToken;
           setServerUrl(restoredServerUrl);
+
+          if (savedToken && savedUser && isMobileRole(savedUser.role)) {
+            setToken(savedToken);
+            setUser(savedUser);
+            setIsRestoring(false);
+          } else if (!savedToken) {
+            setIsRestoring(false);
+          }
         }
 
         if (savedToken) {
           try {
             const payload = await fetchCurrentUser(savedToken);
-            if (active && isMobileRole(payload.user.role)) {
+            if (!active || sessionTokenRef.current !== savedToken) return;
+
+            if (isMobileRole(payload.user.role)) {
               await sessionStorage.saveUser(payload.user);
+              if (!active || sessionTokenRef.current !== savedToken) return;
               setToken(savedToken);
               setUser(payload.user);
-            } else if (active) {
+            } else {
+              sessionTokenRef.current = null;
+              setToken(null);
+              setUser(null);
               await Promise.all([sessionStorage.clearToken(), sessionStorage.clearUser()]);
               await clearOfflineGateManifests().catch(() => undefined);
               if (savedUser?.role === 'student') {
@@ -56,16 +73,17 @@ export function SecuritySessionProvider({ children }: { children: React.ReactNod
               }
             }
           } catch (error) {
-            if (active && error instanceof ApiError && error.status === 401) {
+            if (!active || sessionTokenRef.current !== savedToken) return;
+
+            if (error instanceof ApiError && error.status === 401) {
+              sessionTokenRef.current = null;
+              setToken(null);
+              setUser(null);
               await Promise.all([sessionStorage.clearToken(), sessionStorage.clearUser()]);
               await clearOfflineGateManifests().catch(() => undefined);
               if (savedUser?.role === 'student') {
                 await clearStudentTicketCache(restoredServerUrl, savedUser.id).catch(() => undefined);
               }
-            } else if (active && (!(error instanceof ApiError) || error.status >= 500)
-              && savedUser && isMobileRole(savedUser.role)) {
-              setToken(savedToken);
-              setUser(savedUser);
             }
           }
         }
@@ -84,6 +102,7 @@ export function SecuritySessionProvider({ children }: { children: React.ReactNod
       sessionStorage.saveToken(payload.token),
       sessionStorage.saveUser(payload.user),
     ]);
+    sessionTokenRef.current = payload.token;
     setToken(payload.token);
     setUser(payload.user);
   }, []);
@@ -91,6 +110,7 @@ export function SecuritySessionProvider({ children }: { children: React.ReactNod
   const signOut = useCallback(async () => {
     const currentToken = token;
     const currentUser = user;
+    sessionTokenRef.current = null;
     setUser(null);
     setToken(null);
     try {
@@ -112,6 +132,7 @@ export function SecuritySessionProvider({ children }: { children: React.ReactNod
 
     // A Sanctum token belongs to the server that issued it.
     await sessionStorage.saveApiBaseUrl(nextUrl);
+    sessionTokenRef.current = null;
     await Promise.all([sessionStorage.clearToken(), sessionStorage.clearUser()]);
     await clearOfflineGateManifests().catch(() => undefined);
     if (user?.role === 'student') {

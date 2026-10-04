@@ -23,10 +23,11 @@ Admin web dashboard ── admin API ──────┘
 ```
 
 - **Laravel** owns user identity, event and venue configuration, gate assignments, issued ticket records, audit history, and reconciliation of scanner batches.
-- **Supabase PostgreSQL** is the shared server database. Migrations in `backend/database/migrations` define its schema. Credentials and service keys stay in local environment files and the hosted secret store.
+- **Supabase PostgreSQL** is the shared server database for normal development and hosted use. Migrations in `backend/database/migrations` define its schema. Credentials and service keys stay in local environment files and the hosted secret store.
+- **Local presentation PostgreSQL** is an isolated alternative for demonstrations on Fedora. It runs in Lerd's PostgreSQL service, uses the ignored `backend/.env.demo` environment, and is reachable by phones on the same Wi-Fi through the Laravel API. It does not replicate with Supabase; the demo has its own accounts and tickets. Setup and run instructions are in [the backend README](../backend/README.md#local-presentation-mode).
 - **Admin web** is a React + TypeScript desktop client. It renders server data and sends administrator actions through the versioned API. The server remains responsible for authorization and business rules.
 - **Student mobile** renders the student's own ticket. The QR token rotates every 30 seconds using the ticket's TOTP seed; a static screenshot must not be treated as a valid ticket.
-- **Security scanner mobile** can sign in, configure the local API address, and list metadata for its assigned event gates. The planned full scanner downloads only its assigned gate's manifest, checks rotating tokens against its own clock, records accepted scans in its local queue, and syncs batches when connectivity returns.
+- **Security scanner mobile** signs in, downloads only its assigned gate's manifest, validates rotating tokens against its own clock, encrypts the manifest and pending scans before storing them locally, and syncs batches when connectivity returns. These flows are implemented in the Expo scanner services and screens.
 
 ## Offline admission and reconciliation
 
@@ -49,7 +50,7 @@ Do not move admission, capacity, assignment, or authorization rules into a view.
 - A TOTP seed is a secret. Never print it, the QR payload, bearer tokens, or `.env` values to logs, screenshots, analytics, or commits.
 - Gate manifests are restricted to assigned security staff and must not be cached by shared HTTP caches.
 - Mobile bearer tokens and cryptographic material use protected device storage.
-- **Open implementation conflict:** the Expo rule says `expo-secure-store` is the exclusive store for cryptographic ticket secrets, while the scanner schema sketch in `architecture/04-mobile-scanner-expo-sqlite.md` places `totp_secret` in SQLite. Until an ADR resolves the storage design, do not persist plaintext seeds in SQLite. Update the rule and schema together before implementing manifest persistence.
+- Scanner manifests and pending scan payloads are encrypted with AES-256-GCM before SQLite persistence; their encryption keys stay in Expo SecureStore. See [ADR 010](../architecture/decisions/010-encrypted-offline-ticket-and-scan-storage.md).
 - Never enable predictable demo credentials by default. If demo accounts are added, gate them behind an explicit opt-in that cannot be enabled in production.
 
 ## 30–50% milestone focus

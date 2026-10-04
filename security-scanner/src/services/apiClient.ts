@@ -61,16 +61,20 @@ export async function testApiConnection(value: string): Promise<string> {
   const url = normalizeApiBaseUrl(value);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5_000);
+  let response: Response;
+
   try {
-    const response = await fetch(`${url}/auth/me`, {
+    response = await fetch(url + '/auth/me', {
       headers: { Accept: 'application/json' },
       signal: controller.signal,
     });
-    if (response.ok || response.status === 401) return 'The EUEvent API is reachable.';
-    throw new Error(`The server responded with HTTP ${response.status}. Check that this is the EUEvent API URL.`);
   } catch {
     throw new Error('Could not reach the server. Check the LAN address and firewall.');
   } finally {
     clearTimeout(timeoutId);
   }
+
+  if (response.ok || response.status === 401) return 'The EUEvent API is reachable.';
+
+  throw new Error('The server responded with HTTP ' + response.status + '. Check that this is the EUEvent API URL.');
 }

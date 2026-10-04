@@ -9,6 +9,7 @@ use App\Models\EventGate;
 use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -37,7 +38,7 @@ class GateManifestController extends Controller
         }
 
         $eventGate->load([
-            'tickets' => function (Builder $query): void {
+            'tickets' => function (HasMany $query): void {
                 $query
                     ->whereIn('status', [Ticket::STATUS_ISSUED, Ticket::STATUS_CLAIMED])
                     ->with('user:id,student_number')

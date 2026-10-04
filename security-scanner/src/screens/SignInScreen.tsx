@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyRound, Server, Settings2, ShieldCheck, TicketCheck } from 'lucide-react-native';
 import { useSecuritySession } from '../hooks/useSecuritySession';
 import { colors, fonts } from '../theme';
@@ -53,7 +54,8 @@ export function SignInScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
+      <SafeAreaView style={styles.flex}>
+        <ScrollView style={styles.flex} contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         <View style={styles.brandRow}>
           <View style={styles.brand}>
             <Image source={require('../../assets/euevent-192.png')} style={styles.logo} accessibilityLabel="EUEvent logo" />
@@ -148,7 +150,8 @@ export function SignInScreen() {
         <Text style={styles.footer}>
           {isStudent ? 'Digital tickets are for the assigned student account only' : 'For authorized event security staff only'}
         </Text>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     </KeyboardAvoidingView>
   );
 }
