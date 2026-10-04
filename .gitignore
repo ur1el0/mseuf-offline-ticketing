@@ -66,3 +66,8 @@ Thumbs.db
 .phpunit.result.cache
 coverage/
 .nyc_output/
+
+# Local AI tooling and plugin-generated state
+/.agents/skills/impeccable/
+.impeccable/
+.claude/
