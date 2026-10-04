@@ -11,6 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Camera, CheckCircle2, CloudOff, X } from 'lucide-react-native';
 import type { AssignedGate } from '../services/assignedGates';
 import type { OfflineGateManifest } from '../services/offlineManifestStore';
@@ -122,7 +123,8 @@ export function GateScanModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="fullScreen">
-      <View style={styles.screen}>
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.screen}>
         <View style={styles.header}>
           <View style={styles.headerTitleWrap}>
             <Text style={styles.eyebrow}>SECURITY SCANNER</Text>
@@ -192,7 +194,8 @@ export function GateScanModal({
           <Text style={styles.footerText}>Keep the screen visible at the door. Offline scans stay encrypted on this device until they are synchronized.</Text>
           {isProcessing ? <ActivityIndicator style={styles.processing} color={colors.gold} /> : null}
         </View>
-      </View>
+        </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }
@@ -231,7 +234,7 @@ function serverReason(reasonCode: string | null): string {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 56 : 30, paddingHorizontal: 20, paddingBottom: 20 },
+  screen: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 20 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginBottom: 20 },
   headerTitleWrap: { flex: 1, gap: 3 },
   eyebrow: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 1.5 },
