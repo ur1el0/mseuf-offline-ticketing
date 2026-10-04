@@ -1,14 +1,33 @@
 # EUEvent administrator dashboard
 
-This React + TypeScript client uses the Laravel API for administrator sign-in and live operational metrics. It does not persist bearer tokens in browser storage; a refresh returns to the sign-in screen. Metrics refresh every 10 seconds, and the last successful response remains visible through brief network failures.
+The desktop React and TypeScript dashboard uses the Laravel API for administrator workflows. It supports student and security-staff account creation, venue and physical gate setup, event scheduling and lifecycle changes, event gate/staff assignment, ticket issuance, operational metrics, and activity-log review.
 
-## Local setup with Lerd
+The dashboard keeps the Sanctum bearer token in memory. Reloading the page clears the session and requires another sign-in. Metrics refresh every 10 seconds and retain the last successful result during brief network failures.
 
-1. In `admin-web`, copy `.env.example` to `.env`.
-2. Confirm `VITE_BACKEND_ORIGIN` points to the Lerd URL for Laravel (default `https://backend.test`).
-3. Run `npm install` and then `npm run dev`.
-4. Open the Vite URL and sign in with an administrator account.
+## Run locally with Lerd
 
-The dev server proxies `/api/*` to Laravel, avoiding a browser CORS change for local development. In production, set `VITE_API_BASE_URL` to the deployment's API path or origin and serve the API through the same trusted host.
+1. From `admin-web/`, create the local environment file:
 
-Event setup, gate assignments, complete audit-log browsing, and scanner heartbeat data are not connected yet because the backend does not expose those endpoints. The dashboard labels missing telemetry as unavailable instead of showing a misleading zero.
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Set `VITE_BACKEND_ORIGIN` to the Laravel host. Use `https://backend.test` for a linked Lerd site. For the isolated presentation API, use `http://127.0.0.1:8002`.
+3. Install dependencies and start Vite:
+
+   ```bash
+   npm install
+   npm run dev -- --host 0.0.0.0
+   ```
+
+4. Open the Vite address shown in the terminal and sign in with an administrator account.
+
+The Vite development server proxies `/api/*` to `VITE_BACKEND_ORIGIN`; `VITE_API_BASE_URL` defaults to `/api/v1`. For local presentation setup, see [the backend README](../backend/README.md#local-presentation-mode).
+
+## Build
+
+```bash
+npm run build
+```
+
+The production API base should be configured for the deployed environment. Use HTTPS when sending real user credentials or ticket data.

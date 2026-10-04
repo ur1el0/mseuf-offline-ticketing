@@ -1,118 +1,79 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# EUEvent Laravel backend
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+This directory contains the PHP 8.5 / Laravel 13 API. It owns authentication, role checks, event and venue data, ticket issuance, encrypted ticket seeds, scan reconciliation, and audit history. The React dashboard and Expo app use its versioned `/api/v1` JSON endpoints.
 
-## About Laravel
+## Main API areas
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Authentication and role-specific student, security-staff, and administrator access.
+- Administrator management for students, staff, venues, gates, events, gate assignments, and ticket issuance.
+- Student ticket wallet and staff gate-manifest endpoints.
+- Scanner batch synchronization with TOTP verification, gate/event checks, idempotent scan IDs, and anomaly logging.
+- Administrator metrics and activity logs.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Controllers handle HTTP input and responses. Form Requests validate and authorize requests; application services apply event and ticket rules in database transactions; Eloquent models map the PostgreSQL schema.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Local development
 
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+Install dependencies and configure `.env` for the database and app key used by your local Laravel environment:
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer install
+cp .env.example .env
+php artisan key:generate
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Set the local database values in `.env` before running migrations. Never commit `.env`, database credentials, or encryption keys.
 
-## Contributing
+For a safe demo database isolated from Supabase, follow the [local presentation mode](#local-presentation-mode).
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Tests and quality checks
 
-## Code of Conduct
+From this directory:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+php artisan test --compact
+vendor/bin/pint --dirty --format agent
+php artisan route:list --path=api/v1
+```
 
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
-
+The PHPUnit configuration uses in-memory SQLite. Tests cover student ticket access, assigned-gate manifests, offline scan reconciliation and retries, role checks, audit decisions, and presentation seeding without contacting Supabase.
 
 ## Local presentation mode
 
-Use this mode when the venue internet is unreliable. Fedora runs Laravel and a dedicated PostgreSQL database locally; the admin browser and phones connect over the same Wi-Fi. This database is separate from Supabase and contains only local demo data.
+Use this mode when the venue's internet connection is unreliable. Fedora runs the API and a dedicated PostgreSQL database locally; a phone and dashboard computer reach them over the same Wi-Fi network. This database is separate from Supabase and contains local demo data.
 
 ### One-time setup
 
-From the repository root:
+Install Composer dependencies, then from `backend/` run:
 
 ```bash
-cd backend
 ./scripts/setup-presentation-demo.sh
 ```
 
-The script starts Lerd PostgreSQL if needed, creates a dedicated `euevent_demo` database and login, generates unique local credentials, runs Laravel migrations, and seeds one administrator, a venue, and Gate A. It writes secrets to the ignored, owner-readable-only `.env.demo` file. It does not change `.env` or contact Supabase.
+The script uses the Lerd PostgreSQL container, creates a dedicated `euevent_demo` database and login, generates local credentials, runs migrations, and seeds an administrator, a venue, and Gate A. It writes secrets to the ignored, owner-readable-only `.env.demo`. It does not change `.env` or contact Supabase. The seeder refuses to run outside Laravel's `demo` environment.
 
-The generated administrator is `demo-admin@euevent.test`. To read the generated password on Fedora:
+The demo administrator email is `demo-admin@euevent.test`. Read the generated password locally with:
 
 ```bash
 grep '^EUEVENT_DEMO_ADMIN_PASSWORD=' .env.demo
 ```
 
-Keep that password on the presentation computer. The demo seeder is explicitly restricted to Laravel's `demo` environment.
+Keep the password on the presentation computer. Create student and security-staff accounts in the dashboard before issuing tickets or testing scans.
 
-### Start the API and clients
+### Start the API
 
-1. Start the local Laravel API and database from `backend`:
+From `backend/`:
 
-   ```bash
-   ./scripts/start-presentation-demo.sh
-   ```
+```bash
+./scripts/start-presentation-demo.sh
+```
 
-   Laravel listens on port `8002` on Fedora's LAN interfaces. Keep this terminal open.
+The API listens on port 8002 on Fedora's LAN interfaces. Keep that terminal open.
 
-2. In another terminal, run the administrator dashboard:
+### Network behavior
 
-   ```bash
-   cd admin-web
-   npm run dev -- --host 0.0.0.0
-   ```
+The API, database, dashboard, and mobile traffic stay on the local network. A healthy local Wi-Fi connection is still needed for phones and other computers to reach Fedora. The mobile scanner must download its assigned gate manifest before operating offline. If the local Wi-Fi itself fails, Expo Go may also lose its JavaScript bundle connection to Metro; use an installed standalone build for a presentation that must survive loss of that Wi-Fi.
 
-   Its ignored `.env.local` points the Vite API proxy at the local Laravel API. Open the Vite URL printed in the terminal on Fedora.
+The scanner queues validated scans locally and syncs when the API becomes reachable. During a disconnection it cannot receive event cancellations, revocations, or changed gate assignments, so offline acceptance is provisional until server reconciliation.
 
-3. Start Expo Go on the same Wi-Fi:
-
-   ```bash
-   cd security-scanner
-   npm run start:lan
-   ```
-
-   The launcher detects Fedora's current LAN address and passes it to Expo as the API default. If a phone has an older server address saved in secure storage, open the app's server settings and save the address printed by the launcher. Keep the Metro/Expo terminal open while presenting with Expo Go.
-
-The Fedora LAN address can change when the Wi-Fi router renews its DHCP lease. The launcher detects the current address each time; a DHCP reservation on the presentation router can make it stable if you control that router.
-
-### What works without internet
-
-Once the devices are on the same local Wi-Fi, the API, database, dashboard, and Expo Go bundle can communicate locally without WAN access. A working local Wi-Fi network is still required for phones to reach Fedora. If the venue Wi-Fi has poor WAN bandwidth but a healthy local network, the application traffic stays inside that network. If the local network also fails, security staff need the event manifest already downloaded on their scanner; queued scans can sync after connectivity returns.
-
-Expo Go still loads the JavaScript bundle from the running Metro server. For a presentation that must survive losing the local Wi-Fi too, install a standalone app build and preload the scanner manifest before the network goes down.
+The LAN IP may change when the router renews its DHCP lease. The scanner's `npm run start:lan` launcher detects the current address. A DHCP reservation can keep the address stable if the presentation router is under your control.
