@@ -34,6 +34,7 @@
   },
   "scripts": {
     "start": "expo start",
+    "start:lan": "bash ./scripts/start-lan.sh",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
