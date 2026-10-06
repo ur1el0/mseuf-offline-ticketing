@@ -165,6 +165,27 @@ class SyncScanProcessor
             return $this->result(self::DECISION_REJECTED, self::REASON_SPLIT_BRAIN_COLLISION, true);
         }
 
+        $manifestVersion = (int) (
+            $scan['event_configuration_version']
+            ?? $event->configuration_version
+        );
+        $hasManifestVersionMismatch = $manifestVersion !== (int) $event->configuration_version;
+
+        if ($hasManifestVersionMismatch) {
+            $this->scanRecorder->recordAnomaly(
+                $ticket,
+                $scannedGate,
+                $staff,
+                $deviceId,
+                AuditLog::ANOMALY_MANIFEST_VERSION_MISMATCH,
+                null,
+                [
+                    'scanner_manifest_version' => $manifestVersion,
+                    'current_event_configuration_version' => (int) $event->configuration_version,
+                ],
+            );
+        }
+
         $ticket->status = Ticket::STATUS_CLAIMED;
         $ticket->save();
 
@@ -177,7 +198,7 @@ class SyncScanProcessor
             null,
         );
 
-        return $this->result(self::DECISION_ACCEPTED, null);
+        return $this->result(self::DECISION_ACCEPTED, null, $hasManifestVersionMismatch);
     }
 
     /**

@@ -23,6 +23,8 @@ class AuditLog extends Model
 
     public const ANOMALY_GATE_MISMATCH = 'GATE_MISMATCH';
 
+    public const ANOMALY_MANIFEST_VERSION_MISMATCH = 'MANIFEST_VERSION_MISMATCH';
+
     public $timestamps = false;
 
     protected function casts(): array
