@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Crypto from 'expo-crypto';
 import {
@@ -27,6 +27,7 @@ export function GateScanModal({
   serverUrl,
   staffId,
   token,
+  pendingScanCount,
   onClose,
   onQueueChanged,
 }: {
@@ -36,6 +37,7 @@ export function GateScanModal({
   serverUrl: string;
   staffId: number;
   token: string;
+  pendingScanCount: number;
   onClose: () => void;
   onQueueChanged: () => void;
 }) {
@@ -44,7 +46,78 @@ export function GateScanModal({
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [result, setResult] = useState<{ tone: 'success' | 'error' | 'neutral'; title: string; detail: string } | null>(null);
+  const [syncStatus, setSyncStatus] = useState('');
+  const [syncIssue, setSyncIssue] = useState('');
   const scanLock = useRef(false);
+  const syncInFlight = useRef(false);
+  const syncRequested = useRef(false);
+  const retryAfter = useRef(0);
+  const activeScanId = useRef<string | null>(null);
+  const requestSyncRef = useRef<() => void>(() => undefined);
+
+  const requestBackgroundSync = useCallback(() => {
+    if (!token || Date.now() < retryAfter.current) return;
+    if (syncInFlight.current) {
+      syncRequested.current = true;
+      return;
+    }
+
+    syncInFlight.current = true;
+    syncRequested.current = false;
+    setIsSyncing(true);
+
+    void syncPendingScans(token, serverUrl, staffId)
+      .then((summary) => {
+        retryAfter.current = 0;
+        onQueueChanged();
+
+        const rejectedOutcomes = summary.outcomes.filter((outcome) => outcome.decision === 'rejected');
+        if (rejectedOutcomes.length > 0) {
+          const reason = serverReason(rejectedOutcomes[0].reason_code);
+          setSyncIssue(`${rejectedOutcomes.length} queued ${rejectedOutcomes.length === 1 ? 'scan was' : 'scans were'} rejected after sync. ${reason} Ask the event lead to review entry.`);
+          setSyncStatus(`${summary.accepted} accepted · ${summary.rejected} rejected after sync`);
+        } else if (summary.accepted > 0) {
+          setSyncIssue('');
+          setSyncStatus(`${summary.accepted} ${summary.accepted === 1 ? 'scan' : 'scans'} confirmed by the event server.`);
+        }
+
+        const displayedScanId = activeScanId.current;
+        const scanOutcome = displayedScanId
+          ? summary.outcomes.find((outcome) => outcome.scan_id === displayedScanId)
+          : undefined;
+        if (displayedScanId && scanOutcome?.decision === 'accepted') {
+          setResult({ tone: 'success', title: 'Entry accepted · synced', detail: 'The event server confirmed this ticket. The scan is recorded in the event log.' });
+        } else if (displayedScanId && scanOutcome?.decision === 'rejected') {
+          setResult({ tone: 'error', title: 'Server rejected this scan', detail: serverReason(scanOutcome.reason_code) });
+        }
+      })
+      .catch(() => {
+        retryAfter.current = Date.now() + 30_000;
+        syncRequested.current = false;
+        setSyncStatus('Server unavailable. Scans stay saved on this phone; scanning can continue while sync retries in the background.');
+      })
+      .finally(() => {
+        syncInFlight.current = false;
+        setIsSyncing(false);
+
+        if (syncRequested.current && Date.now() >= retryAfter.current) {
+          syncRequested.current = false;
+          requestSyncRef.current();
+        }
+      });
+  }, [onQueueChanged, serverUrl, staffId, token]);
+
+  useEffect(() => {
+    requestSyncRef.current = requestBackgroundSync;
+  }, [requestBackgroundSync]);
+
+  useEffect(() => {
+    if (!visible || !token) return;
+
+    requestBackgroundSync();
+    const retryInterval = setInterval(() => requestBackgroundSync(), 15_000);
+    return () => clearInterval(retryInterval);
+  }, [requestBackgroundSync, token, visible]);
 
   async function handleBarcode({ data }: { data: string }) {
     if (!visible || !isScanning || scanLock.current) return;
@@ -83,23 +156,11 @@ export function GateScanModal({
       }
 
       onQueueChanged();
+      activeScanId.current = scan.scan_id;
+      setSyncStatus('Saved on this phone. Server confirmation can happen in the background.');
       setResult({ tone: 'success', title: 'Locally validated · saved on device', detail: 'The rotating code matches this saved gate manifest. This is not server confirmation; offline checks cannot see later revocations, event changes, or scans at other disconnected gates. Follow the event’s offline admission procedure and sync promptly.' });
       if (token) {
-        setIsSyncing(true);
-        try {
-          const sync = await syncPendingScans(token, serverUrl, staffId);
-          onQueueChanged();
-          const outcome = sync.outcomes.find((entry) => entry.scan_id === scan.scan_id);
-          if (outcome?.decision === 'accepted') {
-            setResult({ tone: 'success', title: 'Entry accepted · synced', detail: 'The event server confirmed this ticket. The scan is recorded in the event log.' });
-          } else if (outcome?.decision === 'rejected') {
-            setResult({ tone: 'error', title: 'Server rejected this scan', detail: serverReason(outcome.reason_code) });
-          }
-        } catch {
-          setResult({ tone: 'success', title: 'Locally validated · sync pending', detail: 'The code matches this saved gate manifest, but the server could not confirm it. Offline checks cannot see later revocations, event changes, or scans at other disconnected gates. Follow the event’s offline admission procedure and sync promptly.' });
-        } finally {
-          setIsSyncing(false);
-        }
+        requestBackgroundSync();
       }
     } catch (cause) {
       setResult({
@@ -114,6 +175,7 @@ export function GateScanModal({
 
   function scanNext() {
     scanLock.current = false;
+    activeScanId.current = null;
     setResult(null);
     setIsScanning(true);
   }
@@ -146,6 +208,13 @@ export function GateScanModal({
             Snapshot downloaded {manifestTimestamp}. Offline scans cannot receive later ticket revocations, event changes, or other gates’ scans; admission stays provisional until sync.
           </Text>
         </View>
+
+        {syncIssue ? (
+          <View style={styles.syncIssue} accessibilityRole="alert">
+            <AlertTriangle size={15} color={colors.red} />
+            <Text style={styles.syncIssueText}>{syncIssue}</Text>
+          </View>
+        ) : null}
 
         {Platform.OS === 'web' ? (
           <View style={styles.permissionCard}>
@@ -189,10 +258,10 @@ export function GateScanModal({
               <View style={[styles.resultCard, result.tone === 'success' ? styles.resultSuccess : result.tone === 'error' ? styles.resultError : styles.resultNeutral]}>
                 <View style={styles.resultHeading}>
                   {isSyncing ? <ActivityIndicator color={result.tone === 'error' ? colors.red : colors.green} /> : <CheckCircle2 size={20} color={result.tone === 'error' ? colors.red : colors.green} />}
-                  <Text style={[styles.resultTitle, result.tone === 'error' && styles.resultTitleError]}>{isSyncing ? 'Syncing scan…' : result.title}</Text>
+                  <Text style={[styles.resultTitle, result.tone === 'error' && styles.resultTitleError]}>{isSyncing ? 'Syncing saved scans in background…' : result.title}</Text>
                 </View>
                 <Text style={styles.resultDetail}>{result.detail}</Text>
-                {!isScanning && !isProcessing && !isSyncing ? (
+                {!isScanning && !isProcessing ? (
                   <Pressable onPress={scanNext} style={styles.scanNextButton}><Text style={styles.scanNextText}>Scan next ticket</Text></Pressable>
                 ) : null}
               </View>
@@ -202,7 +271,11 @@ export function GateScanModal({
 
         <View style={styles.footer}>
           <Text style={styles.footerTitle}>{snapshot.manifest.tickets.length} tickets prepared for this gate</Text>
-          <Text style={styles.footerText}>Keep the screen visible at the door. Offline scans stay encrypted on this device until they are synchronized.</Text>
+          <Text style={styles.footerText}>
+            {pendingScanCount > 0
+              ? `${pendingScanCount} ${pendingScanCount === 1 ? 'scan is' : 'scans are'} waiting for server confirmation. Continue scanning; queued scans stay encrypted on this device.`
+              : syncStatus || 'Keep the screen visible at the door. Offline scans stay encrypted on this device until they are synchronized.'}
+          </Text>
           {isProcessing ? <ActivityIndicator style={styles.processing} color={colors.gold} /> : null}
         </View>
         </SafeAreaView>
@@ -250,6 +323,8 @@ const styles = StyleSheet.create({
   headerTitleWrap: { flex: 1, gap: 3 },
   manifestWarning: { flexDirection: 'row', alignItems: 'flex-start', gap: 9, borderRadius: 14, borderWidth: 1, borderColor: '#7B5418', backgroundColor: '#33250D', padding: 11, marginBottom: 12 },
   manifestWarningText: { flex: 1, color: '#E6D5AA', fontFamily: fonts.bodyRegular, fontSize: 9, lineHeight: 14 },
+  syncIssue: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: 13, borderWidth: 1, borderColor: '#7B3631', backgroundColor: '#49201E', padding: 10, marginBottom: 12 },
+  syncIssueText: { flex: 1, color: '#FFD5D1', fontFamily: fonts.bodyRegular, fontSize: 9, lineHeight: 14 },
   eyebrow: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 1.5 },
   title: { color: colors.text, fontFamily: fonts.headingStrong, fontSize: 20 },
   subtitle: { color: colors.muted, fontFamily: fonts.bodyRegular, fontSize: 10 },

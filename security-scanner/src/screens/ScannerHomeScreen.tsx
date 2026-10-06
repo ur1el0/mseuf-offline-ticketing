@@ -81,6 +81,10 @@ export function ScannerHomeScreen() {
     }
   }, [serverUrl, staffId, token]);
 
+  const handleQueueChanged = useCallback(() => {
+    void refreshQueue(false);
+  }, [refreshQueue]);
+
   const loadAssignments = useCallback(async (showRefresh = false) => {
     if (!token || !staffId) return;
     setIsRefreshing(showRefresh);
@@ -335,8 +339,9 @@ export function ScannerHomeScreen() {
         serverUrl={serverUrl}
         staffId={staffId ?? 0}
         token={token ?? ''}
+        pendingScanCount={pendingScansCount}
         onClose={() => setSelectedScanGateId(null)}
-        onQueueChanged={() => void refreshQueue(false)}
+        onQueueChanged={handleQueueChanged}
       />
     ) : null}
     </>
