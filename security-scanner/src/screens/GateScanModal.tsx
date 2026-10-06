@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Camera, CheckCircle2, CloudOff, X } from 'lucide-react-native';
+import { AlertTriangle, Camera, CheckCircle2, CloudOff, X } from 'lucide-react-native';
 import type { AssignedGate } from '../services/assignedGates';
 import type { OfflineGateManifest } from '../services/offlineManifestStore';
 import { hasScannedTicket, savePendingScan, type PendingScan } from '../services/offlineScanQueue';
@@ -83,7 +83,7 @@ export function GateScanModal({
       }
 
       onQueueChanged();
-      setResult({ tone: 'success', title: 'Valid pass · saved on device', detail: 'The rotating code matches this gate’s downloaded manifest. The scan is saved securely and awaiting server confirmation.' });
+      setResult({ tone: 'success', title: 'Locally validated · saved on device', detail: 'The rotating code matches this saved gate manifest. This is not server confirmation; offline checks cannot see later revocations, event changes, or scans at other disconnected gates. Follow the event’s offline admission procedure and sync promptly.' });
       if (token) {
         setIsSyncing(true);
         try {
@@ -96,7 +96,7 @@ export function GateScanModal({
             setResult({ tone: 'error', title: 'Server rejected this scan', detail: serverReason(outcome.reason_code) });
           }
         } catch {
-          setResult({ tone: 'success', title: 'Valid pass · saved offline', detail: 'The code matches this gate’s manifest. Keep this device; its scan will sync when the event server is reachable.' });
+          setResult({ tone: 'success', title: 'Locally validated · sync pending', detail: 'The code matches this saved gate manifest, but the server could not confirm it. Offline checks cannot see later revocations, event changes, or scans at other disconnected gates. Follow the event’s offline admission procedure and sync promptly.' });
         } finally {
           setIsSyncing(false);
         }
@@ -120,6 +120,10 @@ export function GateScanModal({
 
   const cameraAllowed = permission?.granted === true;
   const cameraCanBeRequested = permission?.canAskAgain !== false;
+  const manifestDate = new Date(snapshot.downloadedAt);
+  const manifestTimestamp = Number.isNaN(manifestDate.getTime())
+    ? 'an unknown time'
+    : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(manifestDate);
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="fullScreen">
@@ -134,6 +138,13 @@ export function GateScanModal({
           <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close scanner" style={styles.closeButton}>
             <X size={19} color={colors.text} />
           </Pressable>
+        </View>
+
+        <View style={styles.manifestWarning}>
+          <AlertTriangle size={16} color={colors.gold} />
+          <Text style={styles.manifestWarningText}>
+            Snapshot downloaded {manifestTimestamp}. Offline scans cannot receive later ticket revocations, event changes, or other gates’ scans; admission stays provisional until sync.
+          </Text>
         </View>
 
         {Platform.OS === 'web' ? (
@@ -170,7 +181,7 @@ export function GateScanModal({
               <View style={styles.instructionIcon}><Camera size={17} color={colors.gold} /></View>
               <View style={styles.instructionCopy}>
                 <Text style={styles.instructionTitle}>{isScanning ? 'Align the student QR in the frame' : 'Scan paused'}</Text>
-                <Text style={styles.instructionText}>This phone checks the rotating code against the encrypted gate manifest. Network access is not needed for local validation.</Text>
+                <Text style={styles.instructionText}>This phone checks the rotating code against the encrypted gate manifest. Network access is not needed for the check, but offline results are not confirmed by the event server.</Text>
               </View>
             </View>
 
@@ -214,7 +225,7 @@ function invalidTitle(reason: string): string {
 }
 
 function invalidDetail(reason: string): string {
-  if (reason === 'expired') return 'Ask the student to refresh their ticket so the QR updates, then scan again.';
+  if (reason === 'expired') return 'This QR is outside the scanner’s current 30-second time slot. Check that the student phone uses automatic date and time, then scan the live QR again.';
   if (reason === 'unknown_ticket') return 'Update this gate’s manifest while online, then scan again.';
   if (reason === 'ticket_used') return 'The saved manifest marks this ticket as already claimed.';
   if (reason === 'wrong_gate') return 'Check the assigned gate and scan at the gate printed on the student ticket.';
@@ -237,6 +248,8 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 20 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginBottom: 20 },
   headerTitleWrap: { flex: 1, gap: 3 },
+  manifestWarning: { flexDirection: 'row', alignItems: 'flex-start', gap: 9, borderRadius: 14, borderWidth: 1, borderColor: '#7B5418', backgroundColor: '#33250D', padding: 11, marginBottom: 12 },
+  manifestWarningText: { flex: 1, color: '#E6D5AA', fontFamily: fonts.bodyRegular, fontSize: 9, lineHeight: 14 },
   eyebrow: { color: colors.gold, fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 1.5 },
   title: { color: colors.text, fontFamily: fonts.headingStrong, fontSize: 20 },
   subtitle: { color: colors.muted, fontFamily: fonts.bodyRegular, fontSize: 10 },

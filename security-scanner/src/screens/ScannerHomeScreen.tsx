@@ -259,18 +259,25 @@ export function ScannerHomeScreen() {
           <Text style={styles.emptyText}>Ask an administrator to assign you to an event gate, then refresh this screen.</Text>
         </View>
       ) : null}
-      {assignments.map((assignment) => (
-        <AssignmentCard
-          key={assignment.gate_id}
-          assignment={assignment}
-          cachedManifest={cachedManifests[assignment.gate_id]}
-          isDownloading={downloadingGateId === assignment.gate_id}
-          isOffline={isOffline}
-          canScan={Boolean(offlineManifests[assignment.gate_id])}
-          onScan={() => setSelectedScanGateId(assignment.gate_id)}
-          onDownload={() => void downloadManifest(assignment)}
-        />
-      ))}
+      {assignments.map((assignment) => {
+        const snapshot = offlineManifests[assignment.gate_id];
+        const manifestVersionMismatch = snapshot !== undefined
+          && snapshot.manifest.manifest_version !== assignment.manifest_version;
+
+        return (
+          <AssignmentCard
+            key={assignment.gate_id}
+            assignment={assignment}
+            cachedManifest={cachedManifests[assignment.gate_id]}
+            isDownloading={downloadingGateId === assignment.gate_id}
+            isOffline={isOffline}
+            manifestVersionMismatch={manifestVersionMismatch}
+            canScan={Boolean(snapshot) && (!manifestVersionMismatch || isOffline)}
+            onScan={() => setSelectedScanGateId(assignment.gate_id)}
+            onDownload={() => void downloadManifest(assignment)}
+          />
+        );
+      })}
 
       <View style={styles.checklistCard}>
         <Text style={styles.checklistHeading}>Before doors open</Text>
@@ -341,6 +348,7 @@ function AssignmentCard({
   cachedManifest,
   isDownloading,
   isOffline,
+  manifestVersionMismatch,
   canScan,
   onScan,
   onDownload,
@@ -349,6 +357,7 @@ function AssignmentCard({
   cachedManifest?: CachedManifestSummary;
   isDownloading: boolean;
   isOffline: boolean;
+  manifestVersionMismatch: boolean;
   canScan: boolean;
   onScan: () => void;
   onDownload: () => void;
@@ -418,6 +427,13 @@ function AssignmentCard({
           </Pressable>
         </View>
       </View>
+      {manifestVersionMismatch ? (
+        <Text style={styles.manifestUnavailable}>
+          {isOffline
+            ? 'Offline: this saved manifest is out of date. Use the event’s offline admission procedure; local results may miss later changes.'
+            : 'The event changed after this manifest was saved. Update the manifest before scanning.'}
+        </Text>
+      ) : null}
       {!isActive ? <Text style={styles.manifestUnavailable}>Manifests are available when the event is scheduled or in progress.</Text> : null}
     </View>
   );

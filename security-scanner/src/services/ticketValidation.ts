@@ -2,7 +2,7 @@ import type { GateManifest, GateManifestTicket } from './gateManifest';
 import { createRotatingTicketCode } from './totp';
 
 const PERIOD_MILLISECONDS = 30_000;
-const ALLOWED_CLOCK_DRIFT_STEPS = 1;
+const ALLOWED_CLOCK_DRIFT_STEPS = 0;
 
 export type TicketQrCheck =
   | { valid: true; ticket: GateManifestTicket; timeStep: number; code: string }
