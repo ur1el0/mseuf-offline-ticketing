@@ -17,6 +17,7 @@ import type { AssignedGate } from '../services/assignedGates';
 import type { OfflineGateManifest } from '../services/offlineManifestStore';
 import { hasScannedTicket, savePendingScan, type PendingScan } from '../services/offlineScanQueue';
 import { syncPendingScans } from '../services/scanSync';
+import { getTicketRejectionCopy } from '../services/ticketRejectionCopy';
 import { validateTicketQr } from '../services/ticketValidation';
 import { colors, fonts } from '../theme';
 
@@ -129,7 +130,7 @@ export function GateScanModal({
     try {
       const check = await validateTicketQr(data, snapshot.manifest, assignment.gate_id);
       if (!check.valid) {
-        setResult({ tone: 'error', title: invalidTitle(check.reason), detail: invalidDetail(check.reason) });
+        setResult({ tone: 'error', ...getTicketRejectionCopy(check.reason) });
         return;
       }
 
@@ -282,28 +283,6 @@ export function GateScanModal({
       </SafeAreaProvider>
     </Modal>
   );
-}
-
-function invalidTitle(reason: string): string {
-  const titles: Record<string, string> = {
-    invalid_format: 'Unrecognized ticket QR',
-    unknown_ticket: 'Ticket not on this gate manifest',
-    wrong_gate: 'Ticket belongs to another gate',
-    event_inactive: 'Event is not accepting entry',
-    ticket_used: 'Ticket already used',
-    expired: 'Rotating code expired',
-    invalid_code: 'Invalid rotating code',
-  };
-  return titles[reason] ?? 'Ticket rejected';
-}
-
-function invalidDetail(reason: string): string {
-  if (reason === 'expired') return 'This QR is outside the scanner’s current 30-second time slot. Check that the student phone uses automatic date and time, then scan the live QR again.';
-  if (reason === 'unknown_ticket') return 'Update this gate’s manifest while online, then scan again.';
-  if (reason === 'ticket_used') return 'The saved manifest marks this ticket as already claimed.';
-  if (reason === 'wrong_gate') return 'Check the assigned gate and scan at the gate printed on the student ticket.';
-  if (reason === 'event_inactive') return 'The saved event is not scheduled or in progress.';
-  return 'The QR code did not match a valid EUEvent rotating ticket.';
 }
 
 function serverReason(reasonCode: string | null): string {
