@@ -14,6 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class SyncBatchReconciliationTest extends TestCase
@@ -144,6 +145,44 @@ class SyncBatchReconciliationTest extends TestCase
             'id' => $fixture['ticket']->id,
             'status' => Ticket::STATUS_ISSUED,
         ]);
+    }
+
+    /**
+     * @return array<string, array{string, bool, bool|int|string}>
+     */
+    public static function unsupportedOverrideScenarios(): array
+    {
+        return [
+            'revoked ticket with boolean override' => [Ticket::STATUS_REVOKED, false, true],
+            'wrong gate with integer override' => [Ticket::STATUS_ISSUED, true, 1],
+            'claimed ticket with string override' => [Ticket::STATUS_CLAIMED, false, '1'],
+        ];
+    }
+
+    #[DataProvider('unsupportedOverrideScenarios')]
+    public function test_returns_422_when_a_staff_scan_requests_an_unsupported_override(
+        string $ticketStatus,
+        bool $scanAtDifferentGate,
+        bool|int|string $overrideValue,
+    ): void {
+        $fixture = $this->createScanFixture(
+            ticketStatus: $ticketStatus,
+            scanAtDifferentGate: $scanAtDifferentGate,
+        );
+        Sanctum::actingAs($fixture['staff']);
+
+        $this->syncScans([
+            $this->scanPayload($fixture, (string) Str::uuid(), ['is_override' => $overrideValue]),
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('scans.0.is_override');
+
+        $this->assertDatabaseHas('tickets', [
+            'id' => $fixture['ticket']->id,
+            'status' => $ticketStatus,
+        ]);
+        $this->assertDatabaseCount('scan_logs', 0);
+        $this->assertDatabaseCount('audit_logs', 0);
     }
 
     public function test_staff_cannot_sync_scans_for_an_unassigned_gate(): void
