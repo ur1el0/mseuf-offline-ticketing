@@ -25,6 +25,8 @@ class SyncScanProcessor
 
     private const REASON_SPLIT_BRAIN_COLLISION = 'SPLIT_BRAIN_COLLISION';
 
+    private const REASON_OVERRIDE_NOT_SUPPORTED = 'MANUAL_OVERRIDE_NOT_SUPPORTED';
+
     public function __construct(
         private readonly SyncScanRecorder $scanRecorder,
         private readonly TicketQrVerificationService $ticketQrVerificationService,
@@ -52,6 +54,19 @@ class SyncScanProcessor
         $gateId = (int) $scan['gate_id'];
         $reportedStep = (int) $scan['code_step'];
         $scanTimeStep = intdiv((int) $scan['scanned_at'], 30_000);
+
+        if (filter_var($scan['is_override'], FILTER_VALIDATE_BOOLEAN)) {
+            $this->scanRecorder->recordDecision(
+                $scan,
+                $scannedGate,
+                $staff,
+                $deviceId,
+                self::DECISION_REJECTED,
+                self::REASON_OVERRIDE_NOT_SUPPORTED,
+            );
+
+            return $this->result(self::DECISION_REJECTED, self::REASON_OVERRIDE_NOT_SUPPORTED);
+        }
 
         if (abs($reportedStep - $scanTimeStep) > 1
             || ! $this->ticketQrVerificationService->matches($ticket, $reportedStep, $scan['code'])) {
@@ -84,40 +99,6 @@ class SyncScanProcessor
             );
 
             return $this->result(self::DECISION_REJECTED, self::REASON_EVENT_NOT_ACTIVE);
-        }
-
-        if ((bool) $scan['is_override']) {
-            $ticketStatusBefore = $ticket->status;
-
-            if ($ticketStatusBefore === Ticket::STATUS_ISSUED) {
-                $ticket->status = Ticket::STATUS_CLAIMED;
-                $ticket->save();
-            }
-
-            $this->scanRecorder->recordDecision(
-                $scan,
-                $scannedGate,
-                $staff,
-                $deviceId,
-                self::DECISION_ACCEPTED,
-                null,
-            );
-
-            $this->scanRecorder->recordAnomaly(
-                $ticket,
-                $scannedGate,
-                $staff,
-                $deviceId,
-                AuditLog::ANOMALY_OVERRIDE,
-                null,
-                [
-                    'ticket_status_before' => $ticketStatusBefore,
-                    'ticket_event_gate_id' => (int) $ticket->event_gate_id,
-                    'is_gate_mismatch' => (int) $ticket->event_gate_id !== $gateId,
-                ],
-            );
-
-            return $this->result(self::DECISION_ACCEPTED, null, true);
         }
 
         if ($ticket->status === Ticket::STATUS_REVOKED) {
