@@ -27,6 +27,10 @@
   .event-create-form { grid-template-columns: minmax(0, 1fr); }
   .event-create-form label, .event-create-form input, .event-create-form select, .event-create-form textarea, .event-create-form .event-primary-button { grid-column: 1; }
   .gate-panel, .admission-panel { min-height: 0; }
+  .ticket-roster-item { grid-template-columns: minmax(0, 1fr) auto; }
+  .ticket-roster-item > .event-status { grid-column: 2; grid-row: 1; }
+  .ticket-roster-item > .ticket-roster-action { grid-column: 2; grid-row: 2; }
+  .ticket-roster-revoke-form { grid-column: 1 / -1; }
   .dashboard-footer { flex-direction: column; }
   .login-layout { grid-template-columns: 1fr; }
   .login-brand-panel { min-height: 230px; padding: 24px; gap: 18px; }

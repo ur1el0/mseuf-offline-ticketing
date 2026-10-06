@@ -175,6 +175,9 @@
 .event-status--postponed { color: #805716; background: #fff2d5; }
 .event-status--cancelled { color: #9a342c; background: #fff0ed; }
 .event-status--completed { color: #4f6262; background: #e9f0f0; }
+.event-status--issued { color: #805716; background: #fff2d5; }
+.event-status--claimed { color: #17663c; background: #e8f6ed; }
+.event-status--revoked { color: #9a342c; background: #fff0ed; }
 .event-detail { display: grid; gap: 15px; min-width: 0; }
 .event-details-panel { display: grid; gap: 12px; }
 .event-details-panel .panel-heading h2 { max-width: 450px; overflow-wrap: anywhere; }
@@ -220,6 +223,31 @@
 .ticket-issuance-form .ticket-issuance-note,
 .ticket-issuance-form .event-primary-button { grid-column: 2; justify-self: start; }
 .ticket-issuance-note { margin: 0; color: #907c77; font-size: 9px; line-height: 1.55; }
+.ticket-roster-panel { display: grid; gap: 12px; }
+.ticket-roster-warning { display: flex; align-items: flex-start; gap: 8px; margin: 0; border: 1px solid #f0d8a5; border-radius: 12px; padding: 10px 11px; color: #79531b; background: #fff8e7; font-size: 9px; line-height: 1.5; }
+.ticket-roster-warning svg { flex: 0 0 auto; margin-top: 1px; }
+.ticket-roster-message { margin: 0; border-radius: 11px; padding: 9px 11px; font-size: 9px; line-height: 1.5; }
+.ticket-roster-message--error { border: 1px solid #f3c9c1; color: #92372f; background: #fff0ed; }
+.ticket-roster-message--success { border: 1px solid #ccebd6; color: #17663c; background: #e8f6ed; }
+.ticket-roster-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ticket-roster-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 9px; border: 1px solid #f0e6e3; border-radius: 14px; padding: 10px; background: #fffdfc; }
+.ticket-roster-identity { display: grid; gap: 3px; min-width: 0; }
+.ticket-roster-identity strong { overflow: hidden; color: #38201e; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.ticket-roster-identity span { overflow: hidden; color: #907c77; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.ticket-roster-action, .ticket-roster-cancel { min-height: 31px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid #eadfdd; border-radius: 10px; padding: 0 9px; color: #68433d; background: #fffdfc; font: inherit; font-size: 9px; font-weight: 700; }
+.ticket-roster-action:hover:not(:disabled), .ticket-roster-cancel:hover:not(:disabled) { border-color: #d8c5c0; background: #f8f2ef; }
+.ticket-roster-action--danger { border-color: #edc2bb; color: #9a342c; background: #fff4f1; }
+.ticket-roster-action--danger:hover:not(:disabled) { border-color: #dc9c91; background: #ffebe7; }
+.ticket-roster-action:disabled, .ticket-roster-cancel:disabled { cursor: progress; opacity: .65; }
+.ticket-roster-revoke-form { grid-column: 1 / -1; display: grid; gap: 7px; border-top: 1px solid #f0e6e3; padding-top: 10px; }
+.ticket-roster-revoke-form label { color: #533330; font-size: 9px; font-weight: 700; }
+.ticket-roster-revoke-form textarea { width: 100%; min-height: 54px; border: 1px solid #eadfdd; border-radius: 11px; padding: 8px 10px; color: #2a1010; background: #fffdfc; font: inherit; font-size: 9px; resize: vertical; }
+.ticket-roster-revoke-form textarea:focus { border-color: #d59c1b; outline: 3px solid rgb(255 203 47 / 19%); }
+.ticket-roster-revoke-form > div { display: flex; flex-wrap: wrap; gap: 7px; }
+.ticket-roster-pagination { display: flex; align-items: center; justify-content: space-between; color: #907c77; font-size: 9px; }
+.ticket-roster-pagination > div { display: flex; gap: 6px; }
+.ticket-roster-pagination button { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid #eadfdd; border-radius: 10px; color: #68433d; background: #fffdfc; }
+.ticket-roster-pagination button:disabled { cursor: not-allowed; opacity: .45; }
 
 .student-management-view, .activity-log-view { display: grid; align-content: start; gap: 18px; min-height: 100%; }
 .students-layout { display: grid; grid-template-columns: minmax(280px, .85fr) minmax(0, 1.15fr); align-items: start; gap: 15px; }

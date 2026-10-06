@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { AlertCircle, CalendarDays, Check, Clock3, DoorOpen, Loader2, Plus, Save, ShieldCheck, TicketCheck } from 'lucide-react';
 import { apiRequest } from '../services/apiClient';
 import type { SecurityStaff } from '../types';
+import { TicketRosterPanel } from './TicketRosterPanel';
 
 type EventStatus = 'draft' | 'scheduled' | 'in_progress' | 'postponed' | 'cancelled' | 'completed';
 
@@ -414,6 +415,22 @@ export function AdminEventManagement({ token }: AdminEventManagementProps) {
     }
   }
 
+  function handleTicketRevoked(eventGateId: number, configurationVersion: number): void {
+    if (!selectedEvent) {
+      return;
+    }
+
+    setEvents((current) => current.map((eventItem) => eventItem.id !== selectedEvent.id
+      ? eventItem
+      : {
+        ...eventItem,
+        configuration_version: configurationVersion,
+        event_gates: eventItem.event_gates.map((gate) => gate.id !== eventGateId
+          ? gate
+          : { ...gate, ticket_count: Math.max(0, gate.ticket_count - 1) }),
+      }));
+  }
+
   function toggleGate(gate: VenueGateOption, isChecked: boolean): void {
     setGateDraft((current) => {
       if (isChecked) {
@@ -667,6 +684,14 @@ export function AdminEventManagement({ token }: AdminEventManagementProps) {
                 </form>
               )}
             </section>
+
+            <TicketRosterPanel
+              key={selectedEvent.id}
+              eventId={selectedEvent.id}
+              configurationVersion={selectedEvent.configuration_version}
+              token={token}
+              onTicketRevoked={handleTicketRevoked}
+            />
           </div>
         ) : (
           <section className="surface-card event-no-selection">
