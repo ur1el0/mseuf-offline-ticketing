@@ -5,6 +5,7 @@ namespace App\Http\Requests\Api\V1;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class SyncBatchRequest extends FormRequest
 {
@@ -30,6 +31,29 @@ class SyncBatchRequest extends FormRequest
         $user = $this->user();
 
         return $user instanceof User && $user->isSecurityStaff();
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $scans = $this->input('scans', []);
+
+            if (! is_array($scans)) {
+                return;
+            }
+
+            foreach ($scans as $index => $scan) {
+                $override = is_array($scan) ? ($scan['is_override'] ?? false) : false;
+
+                if ((is_bool($override) || is_int($override) || is_string($override))
+                    && filter_var($override, FILTER_VALIDATE_BOOLEAN)) {
+                    $validator->errors()->add(
+                        "scans.{$index}.is_override",
+                        'Manual ticket overrides are not supported.',
+                    );
+                }
+            }
+        });
     }
 
     /**

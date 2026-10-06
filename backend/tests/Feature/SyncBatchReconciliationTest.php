@@ -14,6 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class SyncBatchReconciliationTest extends TestCase
@@ -33,7 +34,8 @@ class SyncBatchReconciliationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('processed', 1)
             ->assertJsonPath('outcomes.0.decision', 'accepted')
-            ->assertJsonPath('outcomes.0.reason_code', null);
+            ->assertJsonPath('outcomes.0.reason_code', null)
+            ->assertJsonPath('anomalies_logged', 0);
 
         $this->assertDatabaseHas('tickets', [
             'id' => $fixture['ticket']->id,
@@ -45,6 +47,35 @@ class SyncBatchReconciliationTest extends TestCase
             'decision' => 'accepted',
             'reason_code' => null,
         ]);
+        $this->assertDatabaseCount('audit_logs', 0);
+    }
+
+    public function test_a_scan_from_an_outdated_manifest_is_accepted_and_flagged_for_review(): void
+    {
+        $fixture = $this->createScanFixture();
+        $event = $fixture['scannedGate']->event;
+        $event->configuration_version = 2;
+        $event->save();
+        Sanctum::actingAs($fixture['staff']);
+
+        $this->syncScans([
+            $this->scanPayload($fixture, (string) Str::uuid(), [
+                'event_configuration_version' => 1,
+            ]),
+        ])
+            ->assertOk()
+            ->assertJsonPath('outcomes.0.decision', 'accepted')
+            ->assertJsonPath('anomalies_logged', 1);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'ticket_id' => $fixture['ticket']->id,
+            'anomaly_type' => AuditLog::ANOMALY_MANIFEST_VERSION_MISMATCH,
+        ]);
+        $anomaly = AuditLog::query()->firstOrFail();
+        $this->assertSame([
+            'scanner_manifest_version' => 1,
+            'current_event_configuration_version' => 2,
+        ], $anomaly->metadata);
     }
 
     public function test_retrying_a_scan_with_the_same_identifier_is_idempotent(): void
@@ -144,6 +175,44 @@ class SyncBatchReconciliationTest extends TestCase
             'id' => $fixture['ticket']->id,
             'status' => Ticket::STATUS_ISSUED,
         ]);
+    }
+
+    /**
+     * @return array<string, array{string, bool, bool|int|string}>
+     */
+    public static function unsupportedOverrideScenarios(): array
+    {
+        return [
+            'revoked ticket with boolean override' => [Ticket::STATUS_REVOKED, false, true],
+            'wrong gate with integer override' => [Ticket::STATUS_ISSUED, true, 1],
+            'claimed ticket with string override' => [Ticket::STATUS_CLAIMED, false, '1'],
+        ];
+    }
+
+    #[DataProvider('unsupportedOverrideScenarios')]
+    public function test_returns_422_when_a_staff_scan_requests_an_unsupported_override(
+        string $ticketStatus,
+        bool $scanAtDifferentGate,
+        bool|int|string $overrideValue,
+    ): void {
+        $fixture = $this->createScanFixture(
+            ticketStatus: $ticketStatus,
+            scanAtDifferentGate: $scanAtDifferentGate,
+        );
+        Sanctum::actingAs($fixture['staff']);
+
+        $this->syncScans([
+            $this->scanPayload($fixture, (string) Str::uuid(), ['is_override' => $overrideValue]),
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('scans.0.is_override');
+
+        $this->assertDatabaseHas('tickets', [
+            'id' => $fixture['ticket']->id,
+            'status' => $ticketStatus,
+        ]);
+        $this->assertDatabaseCount('scan_logs', 0);
+        $this->assertDatabaseCount('audit_logs', 0);
     }
 
     public function test_staff_cannot_sync_scans_for_an_unassigned_gate(): void

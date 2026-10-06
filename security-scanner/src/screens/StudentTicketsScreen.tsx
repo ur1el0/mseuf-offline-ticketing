@@ -171,8 +171,7 @@ function StudentTicketCard({ ticket }: { ticket: StudentTicket }) {
   const [storedCodeError, setStoredCodeError] = useState<{ ticketId: number; secret: string; step: number; message: string } | null>(null);
 
   const isEventEntryOpen = ticket.event.status === 'scheduled' || ticket.event.status === 'in_progress';
-  const isTicketActive = ticket.status === 'issued' || ticket.status === 'claimed';
-  const canDisplayPass = isTicketActive && isEventEntryOpen && ticket.totp_secret !== null;
+  const canDisplayPass = ticket.status === 'issued' && isEventEntryOpen && ticket.totp_secret !== null;
   const timeStep = Math.floor(now / 30_000);
   const secondsRemaining = 30 - Math.floor((now % 30_000) / 1000);
 
@@ -225,9 +224,11 @@ function StudentTicketCard({ ticket }: { ticket: StudentTicket }) {
   const eventSchedule = Number.isNaN(eventDate.getTime())
     ? 'Schedule unavailable'
     : new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(eventDate);
-  const statusText = ticket.status === 'revoked'
-    ? 'Revoked'
-    : ticket.event.status.replace('_', ' ');
+  const statusText = ticket.status === 'claimed'
+    ? 'Used'
+    : ticket.status === 'revoked'
+      ? 'Revoked'
+      : ticket.event.status.replace('_', ' ');
 
   return (
     <View style={styles.ticketCard}>
@@ -283,14 +284,18 @@ function StudentTicketCard({ ticket }: { ticket: StudentTicket }) {
           <Text style={styles.passUnavailableTitle}>
             {ticket.status === 'revoked'
               ? 'This ticket is no longer valid'
-              : ticket.event.status === 'cancelled'
+              : ticket.status === 'claimed'
+                ? 'This ticket has already been used'
+                : ticket.event.status === 'cancelled'
                 ? 'This event was cancelled'
                 : ticket.event.status === 'completed'
                   ? 'This event has ended'
                   : 'Pass available when event is scheduled'}
           </Text>
           <Text style={styles.passUnavailableCopy}>
-            {ticket.event.status === 'draft' || ticket.event.status === 'postponed'
+            {ticket.status === 'claimed'
+              ? 'This entry has been recorded. Contact event staff if you believe this is a mistake.'
+              : ticket.event.status === 'draft' || ticket.event.status === 'postponed'
               ? 'Your ticket stays on this account. Check again after the administrator updates the event.'
               : 'Contact the event administrator if you think this status is incorrect.'}
           </Text>

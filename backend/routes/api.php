@@ -51,9 +51,14 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('/events/{event}', [AdminEventController::class, 'update'])->whereNumber('event');
         Route::put('/events/{event}/gates', [AdminEventGateAssignmentController::class, 'update'])
             ->whereNumber('event');
+        Route::get('/events/{event}/tickets', [AdminEventTicketController::class, 'index'])
+            ->whereNumber('event');
         Route::post('/events/{event}/tickets', [AdminEventTicketController::class, 'store'])
             ->whereNumber('event')
             ->middleware('throttle:30,1');
+        Route::patch('/events/{event}/tickets/{ticket}/revoke', [AdminEventTicketController::class, 'revoke'])
+            ->whereNumber('event')
+            ->whereNumber('ticket');
     });
 
     Route::get('/admin/metrics', AdminMetricsController::class)

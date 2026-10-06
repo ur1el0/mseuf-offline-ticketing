@@ -63,6 +63,18 @@ class OfflineTicketingFlowTest extends TestCase
             'capacity' => 100,
         ]);
 
+        $claimedGate = VenueGate::query()->create([
+            'venue_id' => $venue->id,
+            'code' => 'SOUTH',
+            'name' => 'South Gate',
+        ]);
+
+        $claimedEventGate = EventGate::query()->create([
+            'event_id' => $event->id,
+            'venue_gate_id' => $claimedGate->id,
+            'capacity' => 100,
+        ]);
+
         $student = User::factory()->create();
         $otherStudent = User::factory()->create();
 
@@ -73,6 +85,13 @@ class OfflineTicketingFlowTest extends TestCase
             'event_gate_id' => $eventGate->id,
             'totp_secret' => $ownSecret,
             'status' => Ticket::STATUS_ISSUED,
+        ]);
+
+        $claimedTicket = Ticket::query()->create([
+            'user_id' => $student->id,
+            'event_gate_id' => $claimedEventGate->id,
+            'totp_secret' => str_repeat('c', 40),
+            'status' => Ticket::STATUS_CLAIMED,
         ]);
 
         $otherTicket = Ticket::query()->create([
@@ -86,12 +105,14 @@ class OfflineTicketingFlowTest extends TestCase
 
         $response = $this->getJson('/api/v1/student/tickets')
             ->assertOk()
-            ->assertJsonCount(1, 'tickets');
+            ->assertJsonCount(2, 'tickets');
 
         $visibleTicketIds = array_column($response->json('tickets'), 'id');
+        $ticketsById = collect($response->json('tickets'))->keyBy('id');
 
-        $this->assertSame([$ownTicket->id], $visibleTicketIds);
-        $this->assertSame($ownSecret, $response->json('tickets.0.totp_secret'));
+        $this->assertEqualsCanonicalizing([$ownTicket->id, $claimedTicket->id], $visibleTicketIds);
+        $this->assertSame($ownSecret, $ticketsById[$ownTicket->id]['totp_secret']);
+        $this->assertNull($ticketsById[$claimedTicket->id]['totp_secret']);
         $this->assertNotContains($otherTicket->id, $visibleTicketIds);
     }
 
