@@ -34,7 +34,8 @@ class SyncBatchReconciliationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('processed', 1)
             ->assertJsonPath('outcomes.0.decision', 'accepted')
-            ->assertJsonPath('outcomes.0.reason_code', null);
+            ->assertJsonPath('outcomes.0.reason_code', null)
+            ->assertJsonPath('anomalies_logged', 0);
 
         $this->assertDatabaseHas('tickets', [
             'id' => $fixture['ticket']->id,
@@ -46,6 +47,35 @@ class SyncBatchReconciliationTest extends TestCase
             'decision' => 'accepted',
             'reason_code' => null,
         ]);
+        $this->assertDatabaseCount('audit_logs', 0);
+    }
+
+    public function test_a_scan_from_an_outdated_manifest_is_accepted_and_flagged_for_review(): void
+    {
+        $fixture = $this->createScanFixture();
+        $event = $fixture['scannedGate']->event;
+        $event->configuration_version = 2;
+        $event->save();
+        Sanctum::actingAs($fixture['staff']);
+
+        $this->syncScans([
+            $this->scanPayload($fixture, (string) Str::uuid(), [
+                'event_configuration_version' => 1,
+            ]),
+        ])
+            ->assertOk()
+            ->assertJsonPath('outcomes.0.decision', 'accepted')
+            ->assertJsonPath('anomalies_logged', 1);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'ticket_id' => $fixture['ticket']->id,
+            'anomaly_type' => AuditLog::ANOMALY_MANIFEST_VERSION_MISMATCH,
+        ]);
+        $anomaly = AuditLog::query()->firstOrFail();
+        $this->assertSame([
+            'scanner_manifest_version' => 1,
+            'current_event_configuration_version' => 2,
+        ], $anomaly->metadata);
     }
 
     public function test_retrying_a_scan_with_the_same_identifier_is_idempotent(): void
