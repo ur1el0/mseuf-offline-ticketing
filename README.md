@@ -97,6 +97,7 @@ Build the dashboard from `admin-web/` with `npm run build`. Check the Expo app w
 
 ## More documentation
 
+- [Presentation run of show, system walkthrough, roadmap, and speaker notes](docs/presentation/README.md)
 - [Backend API and demo setup](backend/README.md)
 - [Administrator dashboard](admin-web/README.md)
 - [Student and scanner mobile app](security-scanner/README.md)
