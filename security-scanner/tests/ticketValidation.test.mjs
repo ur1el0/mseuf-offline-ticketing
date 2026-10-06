@@ -1,8 +1,15 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
-import { validateTicketQrCore } from '../src/services/ticketValidationCore.ts';
-import { getTicketRejectionCopy } from '../src/services/ticketRejectionCopy.ts';
+import ts from 'typescript';
+
+const { validateTicketQrCore } = await loadTypeScriptModule(
+  new URL('../src/services/ticketValidationCore.ts', import.meta.url),
+);
+const { getTicketRejectionCopy } = await loadTypeScriptModule(
+  new URL('../src/services/ticketRejectionCopy.ts', import.meta.url),
+);
 
 const TICKET_SECRET = '0123456789abcdef0123456789abcdef01234567';
 const CURRENT_TIME = 1_800_000_000_000;
@@ -47,6 +54,19 @@ function createTotpCode(secret, step) {
   const binaryCode = digest.readUInt32BE(offset) & 0x7fffffff;
 
   return String(binaryCode % 1_000_000).padStart(6, '0');
+}
+
+async function loadTypeScriptModule(sourceUrl) {
+  const source = await readFile(sourceUrl, 'utf8');
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+  });
+  const moduleUrl = `data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`;
+
+  return import(moduleUrl);
 }
 
 test('accepts a current rotating code for a ticket on the selected gate', async () => {
