@@ -6,9 +6,12 @@ This directory contains the PHP 8.5 / Laravel 13 API. It owns authentication, ro
 
 - Authentication and role-specific student, security-staff, and administrator access.
 - Administrator management for students, staff, venues, gates, events, gate assignments, and ticket issuance.
+- Administrator event-ticket roster and audited revocation workflow.
 - Student ticket wallet and staff gate-manifest endpoints.
 - Scanner batch synchronization with TOTP verification, gate/event checks, idempotent scan IDs, and anomaly logging.
 - Administrator metrics and activity logs.
+
+Sanctum bearer tokens expire after 24 hours by default. Set `SANCTUM_EXPIRATION_MINUTES` in `.env` to change that lifetime; mobile clients must sign in again after expiry before protected API calls or scan synchronization can continue.
 
 Controllers handle HTTP input and responses. Form Requests validate and authorize requests; application services apply event and ticket rules in database transactions; Eloquent models map the PostgreSQL schema.
 
@@ -36,7 +39,7 @@ vendor/bin/pint --dirty --format agent
 php artisan route:list --path=api/v1
 ```
 
-The PHPUnit configuration uses in-memory SQLite. Tests cover student ticket access, assigned-gate manifests, offline scan reconciliation and retries, role checks, audit decisions, and presentation seeding without contacting Supabase.
+The PHPUnit configuration uses in-memory SQLite. Tests cover student ticket access, assigned-gate manifests, offline scan reconciliation and retries, role checks, token expiry, ticket revocation, audit decisions, and presentation seeding without contacting Supabase.
 
 ## Local presentation mode
 
